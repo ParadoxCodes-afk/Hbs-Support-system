@@ -1,0 +1,21 @@
+
+/* Followup History: second line for Remarks */
+[data-fieldname="followup_history"] .form-grid .grid-row {
+    display: block !important;
+}
+
+[data-fieldname="followup_history"] .form-grid .grid-row > .data-row {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    width: 100%;
+}
+
+[data-fieldname="followup_history"] .form-grid .grid-row > .remarks-display {
+    display: block;
+    width: 100%;
+    padding: 6px 12px 8px 55px;
+    border-bottom: 1px solid var(--border-color);
+    white-space: normal;
+    overflow-wrap: anywhere;
+    font-size: var(--text-sm);
+}

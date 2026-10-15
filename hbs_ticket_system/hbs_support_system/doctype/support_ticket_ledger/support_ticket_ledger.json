@@ -1,0 +1,186 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "autoname": "field:serial_no",
+ "creation": "2026-09-25 13:18:42.916885",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "support_ticket_party_ledger_section",
+  "serial_no",
+  "party_name",
+  "email",
+  "our_company_name",
+  "contact_details_section",
+  "contact_details",
+  "address_tab",
+  "address_section",
+  "address",
+  "amc_information_tab",
+  "amc_status",
+  "amc_period",
+  "amc_start_date",
+  "amc_expiry_date",
+  "column_break_teno",
+  "amount",
+  "executive",
+  "executive2",
+  "tax_information_tab",
+  "gstin",
+  "column_break_quuh"
+ ],
+ "fields": [
+  {
+   "fieldname": "support_ticket_party_ledger_section",
+   "fieldtype": "Section Break",
+   "label": "Support Ticket Party Ledger"
+  },
+  {
+   "fieldname": "serial_no",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Serial No",
+   "length": 9,
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "party_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Party Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "email",
+   "fieldtype": "Data",
+   "label": "Email"
+  },
+  {
+   "default": "NO",
+   "fieldname": "amc_status",
+   "fieldtype": "Select",
+   "label": "AMC Status",
+   "options": "YES\nNO"
+  },
+  {
+   "fieldname": "amc_expiry_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "AMC Expiry Date"
+  },
+  {
+   "fieldname": "contact_details_section",
+   "fieldtype": "Section Break",
+   "label": "Contact Details"
+  },
+  {
+   "fieldname": "contact_details",
+   "fieldtype": "Table",
+   "label": "Contact Details",
+   "options": "support_ticket_ledger_contacts"
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "label": "Amount"
+  },
+  {
+   "fieldname": "executive",
+   "fieldtype": "Link",
+   "label": "Executive",
+   "options": "User"
+  },
+  {
+   "fieldname": "executive2",
+   "fieldtype": "Link",
+   "label": "Executive2",
+   "options": "User"
+  },
+  {
+   "fieldname": "amc_start_date",
+   "fieldtype": "Date",
+   "label": "AMC Start Date"
+  },
+  {
+   "fieldname": "gstin",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "GSTIN",
+   "length": 15
+  },
+  {
+   "fieldname": "address",
+   "fieldtype": "Small Text",
+   "label": "Address"
+  },
+  {
+   "fieldname": "amc_period",
+   "fieldtype": "Select",
+   "label": "AMC Period",
+   "options": "YEARLY\nHALFYEARLY\nQUARTERLY\nMONTHLY"
+  },
+  {
+   "fieldname": "our_company_name",
+   "fieldtype": "Select",
+   "label": "Our Company Name",
+   "options": "HBS Solutions Pvt Ltd\nNewAge InfoCom Pvt Ltd\nHBS Services"
+  },
+  {
+   "fieldname": "address_tab",
+   "fieldtype": "Tab Break",
+   "label": "Address"
+  },
+  {
+   "fieldname": "address_section",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "amc_information_tab",
+   "fieldtype": "Tab Break",
+   "label": "AMC Information"
+  },
+  {
+   "fieldname": "column_break_teno",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "tax_information_tab",
+   "fieldtype": "Tab Break",
+   "label": "Tax Information"
+  },
+  {
+   "fieldname": "column_break_quuh",
+   "fieldtype": "Column Break"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-10-13 12:53:20.857399",
+ "modified_by": "Administrator",
+ "module": "HBS Support System",
+ "name": "support_ticket_ledger",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "serial_no"
+}

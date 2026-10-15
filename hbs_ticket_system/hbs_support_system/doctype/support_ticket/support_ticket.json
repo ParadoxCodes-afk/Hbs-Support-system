@@ -1,0 +1,250 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "autoname": "HBS-.DD.MM.YYYY.-.###",
+ "creation": "2026-09-25 13:32:11.610651",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "party_details_section",
+  "serial_no",
+  "party_name",
+  "email",
+  "list_sort_order",
+  "pending_time_start",
+  "pending_time",
+  "column_break_lyqy",
+  "contact_name",
+  "contact_phone",
+  "amc_status",
+  "amc_expiry_date",
+  "lead_details_section",
+  "call_source",
+  "call_type",
+  "priority",
+  "column_break_wbnb",
+  "executive",
+  "executive2",
+  "status",
+  "sub_status",
+  "sub_sub_status",
+  "followup_section",
+  "followup_history",
+  "remarks",
+  "call_history_tab",
+  "call_history"
+ ],
+ "fields": [
+  {
+   "fieldname": "party_details_section",
+   "fieldtype": "Section Break",
+   "label": "Party Details"
+  },
+  {
+   "fieldname": "serial_no",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Serial No",
+   "options": "support_ticket_ledger",
+   "reqd": 1
+  },
+  {
+   "fieldname": "party_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Party Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "email",
+   "fieldtype": "Data",
+   "label": "Email"
+  },
+  {
+   "fieldname": "column_break_lyqy",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "contact_name",
+   "fieldtype": "Data",
+   "label": "Contact Name",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "contact_phone",
+   "fieldtype": "Phone",
+   "label": "Contact Phone",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "default": "NO",
+   "fieldname": "amc_status",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "AMC Status",
+   "options": "YES\nNO",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "amc_expiry_date",
+   "fieldtype": "Date",
+   "label": "AMC Expiry Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "lead_details_section",
+   "fieldtype": "Section Break",
+   "label": "Lead Details"
+  },
+  {
+   "fieldname": "executive",
+   "fieldtype": "Link",
+   "label": "Executive",
+   "options": "User",
+   "reqd": 1
+  },
+  {
+   "fieldname": "executive2",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Executive2",
+   "options": "User",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_wbnb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "priority",
+   "fieldtype": "Select",
+   "label": "Priority",
+   "options": "P1\nP2",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "default": "NEW",
+   "fieldname": "status",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "support_ticket_call_status_master",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "followup_section",
+   "fieldtype": "Section Break",
+   "label": "Followup"
+  },
+  {
+   "fieldname": "followup_history",
+   "fieldtype": "Table",
+   "label": "Followup History",
+   "options": "support_ticket_followup",
+   "read_only": 1
+  },
+  {
+   "fieldname": "call_type",
+   "fieldtype": "Link",
+   "label": "Call Type",
+   "options": "support_ticket_call_type_master",
+   "reqd": 1
+  },
+  {
+   "fieldname": "sub_status",
+   "fieldtype": "Data",
+   "label": "Sub Status",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sub_sub_status",
+   "fieldtype": "Data",
+   "label": "Sub Sub Status",
+   "read_only": 1
+  },
+  {
+   "fieldname": "call_source",
+   "fieldtype": "Link",
+   "label": "Call Source",
+   "options": "Support_ticket_call_master",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "list_sort_order",
+   "fieldtype": "Int",
+   "hidden": 1,
+   "label": "List Sort Order",
+   "read_only": 1
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks",
+   "reqd": 1
+  },
+  {
+   "fieldname": "pending_time_start",
+   "fieldtype": "Datetime",
+   "hidden": 1,
+   "label": "Pending Time Start",
+   "read_only": 1
+  },
+  {
+   "fieldname": "pending_time",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "in_list_view": 1,
+   "label": "Pending Time",
+   "read_only": 1
+  },
+  {
+   "fieldname": "call_history_tab",
+   "fieldtype": "Tab Break",
+   "label": "Call History"
+  },
+  {
+   "fieldname": "call_history",
+   "fieldtype": "HTML",
+   "label": "Call History"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-10-12 10:54:24.339597",
+ "modified_by": "Administrator",
+ "module": "HBS Support System",
+ "name": "support_ticket",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "party_name"
+}

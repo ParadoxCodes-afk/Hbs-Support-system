@@ -5,6 +5,10 @@ app_description = "HBS Support System"
 app_email = "hbstest09@gmail.com"
 app_license = "mit"
 
+permission_query_conditions = {
+"support_ticket": "hbs_ticket_system.hbs_support_system.doctype.support_ticket.support_ticket.get_permission_query_conditions"
+}
+
 # Apps
 # ------------------
 
@@ -25,7 +29,7 @@ app_license = "mit"
 # ------------------
 
 # include js, css files in header of desk.html
-# app_include_css = "/assets/hbs_ticket_system/css/hbs_ticket_system.css"
+app_include_css = "/assets/hbs_ticket_system/css/hbs_ticket_system.css"
 # app_include_js = "/assets/hbs_ticket_system/js/hbs_ticket_system.js"
 
 # include js, css files in header of web template
@@ -136,9 +140,11 @@ app_license = "mit"
 # 	"Event": "frappe.desk.doctype.event.event.get_permission_query_conditions",
 # }
 #
-# has_permission = {
-# 	"Event": "frappe.desk.doctype.event.event.has_permission",
-# }
+
+has_permission = {
+ 	"Event": "frappe.desk.doctype.event.event.has_permission",
+}
+
 
 # Document Events
 # ---------------
@@ -189,9 +195,13 @@ app_license = "mit"
 # Overriding Methods
 # ------------------------------
 #
-# override_whitelisted_methods = {
-# 	"frappe.desk.doctype.event.event.get_events": "hbs_ticket_system.event.get_events"
-# }
+override_whitelisted_methods = {
+    "frappe.desk.reportview.get":
+        "hbs_ticket_system.hbs_support_system.support_ticket_reportview.get",
+
+    "frappe.desk.reportview.get_list":
+        "hbs_ticket_system.hbs_support_system.support_ticket_reportview.get_list",
+}
 #
 # each overriding function accepts a `data` argument;
 # generated from the base implementation of the doctype dashboard,
