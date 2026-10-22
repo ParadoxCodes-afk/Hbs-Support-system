@@ -90,8 +90,24 @@ app_include_css = "/assets/hbs_ticket_system/css/hbs_ticket_system.css"
 # ------------
 
 # before_install = "hbs_ticket_system.install.before_install"
-# after_install = "hbs_ticket_system.setup.setup_custom_fields"
-# after_migrate = "hbs_ticket_system.setup.setup_custom_fields"
+after_install = "hbs_ticket_system.patches.sync_desktop_and_sidebar.execute"
+after_migrate = "hbs_ticket_system.patches.sync_desktop_and_sidebar.execute"
+
+fixtures = [
+	{
+		"dt": "Workspace",
+		"filters": [["name", "=", "Support Ticket"]]
+	},
+	{
+		"dt": "Workspace Sidebar",
+		"filters": [["name", "=", "Support Ticket"]]
+	},
+	{
+		"dt": "Desktop Icon",
+		"filters": [["name", "=", "Support Ticket"]]
+	}
+]
+
 
 # Uninstallation
 # ------------
