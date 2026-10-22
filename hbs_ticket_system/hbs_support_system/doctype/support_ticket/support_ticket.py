@@ -296,37 +296,49 @@ class support_ticket(Document):
         if executive2_email:
             cc_list.append(executive2_email)
 
-        frappe.sendmail(
+        display_name = "HBS Support Team"
+        email_addr = "support@hbsmail.in"
 
-            recipients=[self.email],
+        if frappe.db.exists("DocType", "Hbs CRM Email Settings") and frappe.db.exists("Hbs CRM Email Settings"):
+            crm_settings = frappe.get_doc("Hbs CRM Email Settings", ignore_permissions=True)
+            if crm_settings.email_id:
+                email_addr = crm_settings.email_id
+            if crm_settings.sender_name:
+                display_name = crm_settings.sender_name
 
-            cc=cc_list,
+        sender = f"{display_name} <{email_addr}>"
 
-            subject="Support Ticket Created - " + self.name,
+        try:
+            frappe.sendmail(
+                recipients=[self.email],
+                sender=sender,
+                cc=cc_list,
+                subject="Support Ticket Created - " + self.name,
+                message=f"""
+                <p>Dear Customer,</p>
 
-            message=f"""
-            <p>Dear Customer,</p>
+                <p>
+                    Your support ticket has been created successfully.
+                </p>
 
-            <p>
-                Your support ticket has been created successfully.
-            </p>
+                <p>
+                    <b>Ticket No:</b> {self.name}<br>
+                    <b>Serial No:</b> {self.serial_no or ""}<br>
+                    <b>Status:</b> {self.status or ""}
+                </p>
 
-            <p>
-                <b>Ticket No:</b> {self.name}<br>
-                <b>Serial No:</b> {self.serial_no or ""}<br>
-                <b>Status:</b> {self.status or ""}
-            </p>
+                <p>
+                    Thank you.
+                </p>
 
-            <p>
-                Thank you.
-            </p>
-
-            <p>
-                Regards,<br>
-                <b>HBS Solutions Pvt Ltd</b>
-            </p>
-            """
-        )
+                <p>
+                    Regards,<br>
+                    <b>HBS Solutions Pvt Ltd</b>
+                </p>
+                """
+            )
+        except Exception:
+            frappe.log_error(f"Failed to send new ticket email for {self.name}", "Support Ticket Email Error")
 
 
 @frappe.whitelist()
