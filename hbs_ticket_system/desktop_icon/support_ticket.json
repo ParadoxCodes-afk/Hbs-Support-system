@@ -1,0 +1,22 @@
+{
+ "app": "hbs_ticket_system",
+ "bg_color": "gray",
+ "creation": "2026-10-18 14:42:51.427007",
+ "docstatus": 0,
+ "doctype": "Desktop Icon",
+ "hidden": 0,
+ "icon_type": "App",
+ "idx": 0,
+ "label": "Support Ticket",
+ "link": "/app/support-ticket",
+ "link_type": "External",
+ "logo_url": "/assets/hbs_ticket_system/images/support_ticket_logo.svg",
+ "modified": "2026-10-18 14:53:57.501419",
+ "modified_by": "Administrator",
+ "name": "Support Ticket",
+ "owner": "Administrator",
+ "restrict_removal": 0,
+ "roles": [],
+ "sidebar": "Support Ticket",
+ "standard": 1
+}

@@ -8,37 +8,34 @@
  "docstatus": 0,
  "doctype": "Report",
  "doctype_to_sync": [],
- "filters": [
-  {
-   "fieldname": "executive2",
-   "fieldtype": "Data",
-   "label": "Executive2",
-   "mandatory": 0,
-   "options": "User",
-   "wildcard_filter": 0
-  }
- ],
+ "filters": [],
  "idx": 0,
  "is_standard": "Yes",
- "javascript": "frappe.query_reports[\"hbs_support_ticket\"] = {\r\n    filters: [\r\n        {\r\n            fieldname: \"executive2\",\r\n            label: __(\"Executive 2\"),\r\n            fieldtype: \"Link\",\r\n            options: \"User\",\r\n            default: frappe.session.user\r\n        },\r\n        {\r\n            fieldname: \"status\",\r\n            label: __(\"Status\"),\r\n            fieldtype: \"Select\",\r\n            options: [\r\n                \"OPEN\",\r\n                \"NEW\",\r\n                \"FOLLOWUP\",\r\n                \"PENDING\",\r\n                \"COMPLETED\",\r\n                \"All\"\r\n            ],\r\n            default: \"OPEN\"\r\n        }\r\n    ]\r\n};",
  "letter_head": null,
- "modified": "2026-10-12 12:55:01.313012",
+ "modified": "2026-10-21 13:00:10.247198",
  "modified_by": "Administrator",
  "module": "HBS Support System",
  "name": "hbs_support_ticket",
  "owner": "Administrator",
  "prepared_report": 0,
- "query": "\r\nSELECT\r\n    COALESCE(st.executive2, 'Unassigned') AS \"User:Data:200\",\r\n\r\n    COUNT(*) AS \"Total Tickets:Int:120\",\r\n\r\n    SUM(CASE\r\n        WHEN st.status = 'NEW' THEN 1\r\n        ELSE 0\r\n    END) AS \"New:Int:100\",\r\n\r\n    SUM(CASE\r\n        WHEN st.status = 'FOLLOWUP' THEN 1\r\n        ELSE 0\r\n    END) AS \"Followup:Int:100\",\r\n\r\n    SUM(CASE\r\n        WHEN st.status = 'PENDING' THEN 1\r\n        ELSE 0\r\n    END) AS \"Pending:Int:100\",\r\n\r\n    SUM(CASE\r\n        WHEN st.status = 'COMPLETED' THEN 1\r\n        ELSE 0\r\n    END) AS \"Completed:Int:100\"\r\n\r\nFROM `tabsupport_ticket` st\r\n\r\nWHERE\r\n    DATE(st.creation) = CURDATE()\r\n\r\n    OR (\r\n        DATE(st.creation) < CURDATE()\r\n        AND (\r\n            st.status != 'COMPLETED'\r\n\r\n            OR EXISTS (\r\n                SELECT 1\r\n                FROM `tabsupport_ticket_followup` fh\r\n                WHERE fh.parent = st.name\r\n                  AND fh.status = 'COMPLETED'\r\n                  AND DATE(fh.updated_on) = CURDATE()\r\n            )\r\n        )\r\n    )\r\n\r\nGROUP BY st.executive2\r\n\r\nORDER BY st.executive2;",
  "ref_doctype": "support_ticket",
  "report_name": "hbs_support_ticket",
- "report_script": "columns = [\r\n    {\r\n        \"label\": \"Ticket\",\r\n        \"fieldname\": \"name\",\r\n        \"fieldtype\": \"Link\",\r\n        \"options\": \"support_ticket\",\r\n        \"width\": 170\r\n    },\r\n    {\r\n        \"label\": \"Serial No\",\r\n        \"fieldname\": \"serial_no\",\r\n        \"fieldtype\": \"Data\",\r\n        \"width\": 110\r\n    },\r\n    {\r\n        \"label\": \"Contact Name\",\r\n        \"fieldname\": \"contact_name\",\r\n        \"fieldtype\": \"Data\",\r\n        \"width\": 150\r\n    },\r\n    {\r\n        \"label\": \"Contact Phone\",\r\n        \"fieldname\": \"contact_phone\",\r\n        \"fieldtype\": \"Data\",\r\n        \"width\": 150\r\n    },\r\n    {\r\n        \"label\": \"AMC\",\r\n        \"fieldname\": \"amc_status\",\r\n        \"fieldtype\": \"Data\",\r\n        \"width\": 80\r\n    },\r\n    {\r\n        \"label\": \"Status\",\r\n        \"fieldname\": \"status\",\r\n        \"fieldtype\": \"Data\",\r\n        \"width\": 110\r\n    },\r\n    {\r\n        \"label\": \"SUB Status\",\r\n        \"fieldname\": \"sub_status\",\r\n        \"fieldtype\": \"Data\",\r\n        \"width\": 140\r\n    },\r\n    {\r\n        \"label\": \"SUB SUB Status\",\r\n        \"fieldname\": \"sub_sub_status\",\r\n        \"fieldtype\": \"Data\",\r\n        \"width\": 180\r\n    },\r\n    {\r\n        \"label\": \"Created\",\r\n        \"fieldname\": \"creation\",\r\n        \"fieldtype\": \"Datetime\",\r\n        \"width\": 150\r\n    }\r\n]\r\n\r\n\r\n# ==========================================================\r\n# FILTERS\r\n# ==========================================================\r\n\r\nexecutive_filter = filters.get(\"executive2\")\r\nstatus_filter = filters.get(\"status\")\r\n\r\n\r\nconditions = []\r\nvalues = {}\r\n\r\n\r\n# ==========================================================\r\n# EXECUTIVE 2\r\n# ==========================================================\r\n\r\nif executive_filter:\r\n\r\n    conditions.append(\"executive2 = %(executive2)s\")\r\n    values[\"executive2\"] = executive_filter\r\n\r\n\r\n# ==========================================================\r\n# STATUS\r\n# ==========================================================\r\n\r\nif status_filter == \"COMPLETED\":\r\n\r\n    conditions.append(\"status = 'COMPLETED'\")\r\n\r\nelif status_filter == \"NEW\":\r\n\r\n    conditions.append(\"status = 'NEW'\")\r\n\r\nelif status_filter == \"FOLLOWUP\":\r\n\r\n    conditions.append(\"status = 'FOLLOWUP'\")\r\n\r\nelif status_filter == \"PENDING\":\r\n\r\n    conditions.append(\"status = 'PENDING'\")\r\n\r\nelif status_filter == \"All\":\r\n\r\n    pass\r\n\r\nelse:\r\n\r\n    # Default: exclude completed\r\n    conditions.append(\"status != 'COMPLETED'\")\r\n\r\n\r\n# ==========================================================\r\n# WHERE\r\n# ==========================================================\r\n\r\nwhere_clause = \"\"\r\n\r\nif conditions:\r\n    where_clause = \"WHERE \" + \" AND \".join(conditions)\r\n\r\n\r\n# ==========================================================\r\n# QUERY\r\n# ==========================================================\r\n\r\nreport_data = frappe.db.sql(\r\n    f\"\"\"\r\n    SELECT\r\n        name,\r\n        serial_no,\r\n        contact_name,\r\n        contact_phone,\r\n        amc_status,\r\n        status,\r\n        sub_status,\r\n        sub_sub_status,\r\n        creation\r\n\r\n    FROM `tabsupport_ticket`\r\n\r\n    {where_clause}\r\n\r\n    ORDER BY\r\n        CASE\r\n            WHEN amc_status = 'YES'\r\n                 AND status = 'FOLLOWUP' THEN 1\r\n\r\n            WHEN amc_status = 'YES'\r\n                 AND status = 'NEW' THEN 2\r\n\r\n            WHEN amc_status = 'YES'\r\n                 AND status = 'PENDING' THEN 3\r\n\r\n            WHEN status = 'FOLLOWUP' THEN 4\r\n\r\n            WHEN status = 'NEW' THEN 5\r\n\r\n            WHEN status = 'PENDING' THEN 6\r\n\r\n            WHEN status = 'COMPLETED' THEN 7\r\n\r\n            ELSE 8\r\n        END,\r\n\r\n        creation DESC\r\n    \"\"\",\r\n    values,\r\n    as_dict=True\r\n)\r\n\r\n\r\n# ==========================================================\r\n# RESULT\r\n# ==========================================================\r\n\r\ndata = [columns, report_data]",
- "report_type": "Query Report",
+ "report_type": "Script Report",
  "roles": [
   {
-   "role": "System Manager"
+   "role": "All"
   },
   {
-   "role": "HBS Support"
+   "role": "Desk User"
+  },
+  {
+   "role": "Support User"
+  },
+  {
+   "role": "Sales User"
+  },
+  {
+   "role": "System Manager"
   }
  ],
  "snapshot_report": 0,

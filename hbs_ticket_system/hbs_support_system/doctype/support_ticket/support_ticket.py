@@ -2,13 +2,69 @@ import frappe
 from frappe.model.document import Document
 
 
+def normalize_phone(phone):
+    if not phone:
+        return ""
+    phone = str(phone).strip()
+    digits = "".join(filter(str.isdigit, phone))
+    if len(digits) == 10:
+        return f"+91-{digits}"
+    elif len(digits) == 12 and digits.startswith("91"):
+        return f"+91-{digits[2:]}"
+    elif not phone.startswith("+") and digits:
+        return f"+91-{digits}"
+    return phone
+
+
+def is_genuine_tally_serial(serial):
+    if not serial:
+        return True
+    s = str(serial).strip()
+    if len(s) != 9 or not s.isdigit():
+        return False
+    if not s.startswith("7"):
+        return False
+    sum_digits = sum(int(d) for d in s)
+    while sum_digits >= 10:
+        sum_digits = sum(int(d) for d in str(sum_digits))
+    return sum_digits == 9
+
+
+def format_duration(seconds):
+    if seconds is None:
+        return ""
+    seconds = max(0, int(seconds))
+    minutes = seconds // 60
+    days = minutes // 1440
+    hours = (minutes % 1440) // 60
+    mins = minutes % 60
+    parts = []
+    if days:
+        suffix = 's' if days > 1 else ''
+        parts.append(f"{days} day{suffix}")
+    if hours:
+        parts.append(f"{hours} hr")
+    if mins or not parts:
+        parts.append(f"{mins} min")
+    return " ".join(parts)
+
+
 class support_ticket(Document):
+
+    def validate(self):
+        if self.serial_no:
+            s = str(self.serial_no).strip()
+            if not is_genuine_tally_serial(s):
+                frappe.throw("Invalid Serial Number", title="Invalid Serial Number")
+            self.serial_no = s
 
     def before_insert(self):
         self.add_creation_followup()
 
     def before_save(self):
         self.update_list_sort_order()
+        self.update_timing_metrics()
+        self.sync_renewal_details()
 
         
 
@@ -17,6 +73,84 @@ class support_ticket(Document):
 
     def on_update(self):
         self.update_ledger()
+
+
+    # ============================================================
+    # TIMING & COMPLETION METRICS
+    # ============================================================
+
+    def update_timing_metrics(self):
+        now = frappe.utils.now_datetime()
+
+        # Track first entry into FOLLOWUP status
+        if self.status == "FOLLOWUP" and not self.followup_start_time:
+            self.followup_start_time = now
+
+        # When status is COMPLETED
+        if self.status == "COMPLETED":
+            if not self.completed_on:
+                self.completed_on = now
+
+            created = frappe.utils.get_datetime(self.creation) if self.creation else now
+            completed = frappe.utils.get_datetime(self.completed_on)
+
+            # 1. New to Completed
+            total_sec = max(0, (completed - created).total_seconds())
+            self.total_time_taken_mins = round(total_sec / 60.0, 2)
+            self.total_time_taken = format_duration(total_sec)
+            self.pending_time = self.total_time_taken
+
+            # 2. Followup to Completed
+            if self.followup_start_time:
+                fu_start = frappe.utils.get_datetime(self.followup_start_time)
+                fu_sec = max(0, (completed - fu_start).total_seconds())
+                self.followup_time_taken_mins = round(fu_sec / 60.0, 2)
+                self.followup_time_taken = format_duration(fu_sec)
+        else:
+            # Active ticket (not completed): update pending_time snapshot
+            created = frappe.utils.get_datetime(self.creation) if self.creation else now
+            elapsed_sec = max(0, (now - created).total_seconds())
+            self.pending_time = format_duration(elapsed_sec)
+
+            # If ticket was reopened from completed
+            if self.completed_on:
+                self.completed_on = None
+                self.total_time_taken_mins = 0
+                self.total_time_taken = ""
+                self.followup_time_taken_mins = 0
+                self.followup_time_taken = ""
+
+    def sync_renewal_details(self):
+        if not getattr(self, "serial_no", None):
+            self.renewal_party_name = ""
+            self.renewal_license_type = ""
+            self.renewal_tally_version = ""
+            self.renewal_tss_expiry_date = None
+            self.renewal_partner_name = ""
+            self.renewal_tss_status = ""
+            self.renewal_mobile = ""
+            self.renewal_email = ""
+            return
+
+        details = get_tally_renewal_details(self.serial_no)
+        if details:
+            self.renewal_party_name = details.get("party_name") or ""
+            self.renewal_license_type = details.get("license_type") or ""
+            self.renewal_tally_version = details.get("tally_version") or ""
+            self.renewal_tss_expiry_date = details.get("tss_expiry_date")
+            self.renewal_partner_name = details.get("partner_name") or ""
+            self.renewal_tss_status = details.get("tss_status") or ""
+            self.renewal_mobile = details.get("mobile") or ""
+            self.renewal_email = details.get("email") or ""
+        else:
+            self.renewal_party_name = ""
+            self.renewal_license_type = ""
+            self.renewal_tally_version = ""
+            self.renewal_tss_expiry_date = None
+            self.renewal_partner_name = ""
+            self.renewal_tss_status = ""
+            self.renewal_mobile = ""
+            self.renewal_email = ""
 
 
     # ============================================================
@@ -46,10 +180,10 @@ class support_ticket(Document):
         else:
             amc_order = 2
 
-        # Status is secondary
+        # Status is secondary: NEW -> FOLLOWUP -> PENDING -> COMPLETED
         status_order = {
-            "FOLLOWUP": 1,
-            "NEW": 2,
+            "NEW": 1,
+            "FOLLOWUP": 2,
             "PENDING": 3,
             "COMPLETED": 4
         }
@@ -62,49 +196,67 @@ class support_ticket(Document):
     # ============================================================
     # UPDATE LEDGER
     # ============================================================
-
     def update_ledger(self):
-
         serial_no = str(self.serial_no or "").strip()
 
-        if not serial_no.isdigit() or len(serial_no) != 9:
-            frappe.throw(
-                "Serial No must contain exactly 9 digits."
-            )
+        if not is_genuine_tally_serial(serial_no):
+            frappe.throw("Invalid Serial Number", title="Invalid Serial Number")
 
-        ledger = frappe.get_doc(
-            "support_ticket_ledger",
-            serial_no
-        )
+        c_name = (self.contact_name or "").strip()
+        c_phone = normalize_phone(self.contact_phone)
+        if c_phone and not self.contact_phone:
+            self.contact_phone = c_phone
 
-        ledger.party_name = self.party_name
-        ledger.email = self.email
+        if frappe.db.exists("support_ticket_ledger", serial_no):
+            ledger = frappe.get_doc("support_ticket_ledger", serial_no)
+            if self.party_name:
+                ledger.party_name = self.party_name
+            if self.email:
+                ledger.email = self.email
 
-        if self.contact_name:
+            if c_name or c_phone:
+                existing_contact = None
+                for contact in ledger.contact_details:
+                    # Match by name if provided, or by phone if name not provided
+                    if c_name and (contact.contact_name or "").strip().lower() == c_name.lower():
+                        existing_contact = contact
+                        break
+                    elif not c_name and c_phone and (contact.contact_phone or "").strip() == c_phone:
+                        existing_contact = contact
+                        break
 
-            existing_contact = None
+                if existing_contact:
+                    if c_name:
+                        existing_contact.contact_name = c_name
+                    if c_phone:
+                        existing_contact.contact_phone = c_phone
+                else:
+                    ledger.append(
+                        "contact_details",
+                        {
+                            "contact_name": c_name,
+                            "contact_phone": c_phone
+                        }
+                    )
+            ledger.save(ignore_permissions=True)
+        else:
+            contacts = []
+            if c_name or c_phone:
+                contacts.append({
+                    "contact_name": c_name,
+                    "contact_phone": c_phone
+                })
 
-            for contact in ledger.contact_details:
-
-                if contact.contact_name == self.contact_name:
-                    existing_contact = contact
-                    break
-
-            if existing_contact:
-
-                existing_contact.contact_phone = self.contact_phone
-
-            else:
-
-                ledger.append(
-                    "contact_details",
-                    {
-                        "contact_name": self.contact_name,
-                        "contact_phone": self.contact_phone
-                    }
-                )
-
-        ledger.save(ignore_permissions=True)
+            ledger = frappe.get_doc({
+                "doctype": "support_ticket_ledger",
+                "serial_no": serial_no,
+                "party_name": self.party_name,
+                "email": self.email,
+                "amc_status": self.amc_status or "NO",
+                "amc_expiry_date": self.amc_expiry_date,
+                "contact_details": contacts
+            })
+            ledger.insert(ignore_permissions=True)
 
 
 
@@ -178,29 +330,173 @@ class support_ticket(Document):
 
 
 @frappe.whitelist()
+def search_ledger_contacts(query=""):
+    """Search support_ticket_ledger flattened across multiple contact persons."""
+    query = (query or "").strip()
+    like_q = f"%{query}%"
+
+    sql = """
+        SELECT
+            l.name AS serial_no,
+            l.party_name,
+            l.email,
+            l.amc_status,
+            l.amc_expiry_date,
+            c.contact_name,
+            c.contact_phone
+        FROM
+            `tabsupport_ticket_ledger` l
+        LEFT JOIN
+            `tabsupport_ticket_ledger_contacts` c
+            ON c.parent = l.name AND c.parentfield = 'contact_details'
+        WHERE
+            l.name LIKE %s
+            OR l.party_name LIKE %s
+            OR c.contact_name LIKE %s
+            OR c.contact_phone LIKE %s
+        ORDER BY
+            l.name ASC, c.idx ASC
+        LIMIT 50
+    """
+    return frappe.db.sql(sql, (like_q, like_q, like_q, like_q), as_dict=True)
+
+
+@frappe.whitelist()
+def create_ledger_entry(serial_no, party_name, contact_name, contact_phone, email=None, amc_status="NO", amc_expiry_date=None):
+    """Create a new ledger entry with initial contact details and return it for ticket autofill."""
+    if not is_genuine_tally_serial(serial_no):
+        frappe.throw("Invalid Serial Number", title="Invalid Serial Number")
+
+    if frappe.db.exists("support_ticket_ledger", serial_no):
+        frappe.throw(f"Serial No {serial_no} already exists in the Ledger.")
+
+    party_name = (party_name or "").strip()
+    if not party_name:
+        frappe.throw("Party Name is required.")
+
+    contact_name = (contact_name or "").strip()
+    contact_phone = normalize_phone(contact_phone)
+    if not contact_name or not contact_phone:
+        frappe.throw("Contact Name and Contact Phone are required.")
+
+    # Only authorized supervisors and owners can register AMC as YES
+    if amc_status == "YES":
+        settings = get_support_user_settings()
+        if not settings.get("can_alter_amc"):
+            amc_status = "NO"
+            amc_expiry_date = None
+
+    ledger = frappe.get_doc({
+        "doctype": "support_ticket_ledger",
+        "serial_no": serial_no,
+        "party_name": party_name,
+        "email": (email or "").strip(),
+        "amc_status": amc_status or "NO",
+        "amc_expiry_date": amc_expiry_date or None,
+        "contact_details": [
+            {
+                "contact_name": contact_name,
+                "contact_phone": contact_phone
+            }
+        ]
+    })
+    ledger.insert(ignore_permissions=True)
+
+    return {
+        "serial_no": ledger.serial_no,
+        "party_name": ledger.party_name,
+        "email": ledger.email,
+        "amc_status": ledger.amc_status,
+        "amc_expiry_date": str(ledger.amc_expiry_date or ""),
+        "contact_name": contact_name,
+        "contact_phone": contact_phone
+    }
+
+
+@frappe.whitelist()
 def get_active_users(doctype, txt, searchfield, start, page_len, filters):
+    start = frappe.utils.cint(start or 0)
+    page_len = frappe.utils.cint(page_len or 20)
     return frappe.db.sql("""
-        SELECT name
-        FROM `tabUser`
-        WHERE enabled = 1
-          AND user_type = 'System User'
-          AND name LIKE %s
-        ORDER BY name
+        SELECT DISTINCT u.name
+        FROM `tabUser` u
+        JOIN `tabHas Role` hr ON hr.parent = u.name
+        WHERE u.enabled = 1
+          AND u.user_type = 'System User'
+          AND hr.role = 'Support User'
+          AND u.name NOT IN ('Administrator', 'Guest')
+          AND (u.name LIKE %s OR u.full_name LIKE %s)
+        ORDER BY u.full_name ASC
         LIMIT %s, %s
     """, (
+        f"%{txt}%",
         f"%{txt}%",
         start,
         page_len
     ))
 
+
+@frappe.whitelist()
+def get_executive_workload():
+    """Return active Support User role members with active tickets count, sorted by lowest workload first."""
+    users = frappe.db.sql("""
+        SELECT DISTINCT u.name, u.full_name
+        FROM `tabUser` u
+        JOIN `tabHas Role` hr ON hr.parent = u.name
+        WHERE u.enabled = 1
+          AND u.user_type = 'System User'
+          AND hr.role = 'Support User'
+          AND u.name NOT IN ('Administrator', 'Guest')
+        ORDER BY u.full_name ASC
+    """, as_dict=True)
+
+    counts = frappe.db.sql("""
+        SELECT executive2, status, COUNT(*) AS cnt
+        FROM `tabsupport_ticket`
+        WHERE status IN ('NEW', 'FOLLOWUP')
+          AND IFNULL(executive2, '') != ''
+          AND DATE(creation) = CURDATE()
+        GROUP BY executive2, status
+    """, as_dict=True)
+
+    workload_map = {}
+    for row in counts:
+        u = row.executive2
+        if u not in workload_map:
+            workload_map[u] = {"NEW": 0, "FOLLOWUP": 0, "TOTAL": 0}
+        s = str(row.status or "").upper()
+        cnt = row.cnt or 0
+        if s in workload_map[u]:
+            workload_map[u][s] += cnt
+        workload_map[u]["TOTAL"] += cnt
+
+    result = []
+    for user in users:
+        u_id = user.name
+        metrics = workload_map.get(u_id, {"NEW": 0, "FOLLOWUP": 0, "TOTAL": 0})
+        result.append({
+            "name": u_id,
+            "full_name": user.full_name or u_id,
+            "new_count": metrics["NEW"],
+            "followup_count": metrics["FOLLOWUP"],
+            "total_count": metrics["TOTAL"],
+            "is_support": True
+        })
+
+    # Sort ascending: minimum total (NEW + FOLLOWUP) first, then minimum NEW, then minimum FOLLOWUP
+    result.sort(key=lambda x: (x["total_count"], x["new_count"], x["followup_count"], x["full_name"].lower()))
+    return result
+
 @frappe.whitelist()
 def get_call_history(serial_no, current_ticket=None):
+    serial_no = str(serial_no or "").strip()
     if not serial_no:
         return []
 
     filters = {"serial_no": serial_no}
 
     # Exclude the ticket currently open
+    current_ticket = str(current_ticket or "").strip()
     if current_ticket:
         filters["name"] = ["!=", current_ticket]
 
@@ -211,7 +507,9 @@ def get_call_history(serial_no, current_ticket=None):
             "name",
             "call_source",
             "call_type",
+            "executive",
             "status",
+            "remarks",
             "creation"
         ],
         order_by="creation desc",
@@ -219,75 +517,267 @@ def get_call_history(serial_no, current_ticket=None):
     )
     
 
+def is_owner_or_admin(user=None):
+    """Return True if user is Administrator/System, has System Manager role, or role_type == 'Owner' in Hbs User Hierarchy."""
+    if not user:
+        user = frappe.session.user if frappe.session else "Administrator"
+    if user in ("Administrator", "System"):
+        return True
+    if "System Manager" in frappe.get_roles(user):
+        return True
+    try:
+        role_type = frappe.db.get_value("Hbs User Hierarchy", {"user": user}, "role_type")
+        return role_type == "Owner"
+    except Exception:
+        return False
+
+
+@frappe.whitelist()
+def get_support_user_settings():
+    user = frappe.session.user
+    if is_owner_or_admin(user):
+        return {
+            "is_admin": True,
+            "is_owner": True,
+            "is_supervisor": True,
+            "only_new_tickets": False,
+            "allowed_statuses": [],
+            "can_alter_amc": True,
+            "can_alter_ledger": True,
+            "can_import_excel": True,
+            "user": user
+        }
+
+    # Query enabled support_team_hierarchy records for user
+    allowed_statuses = []
+    is_supervisor = False
+    can_alter_amc = False
+    amc_supervisor_name = ""
+
+    try:
+        # Check supervisor row (Supervisors with can_alter_ledger can alter AMC)
+        sup_record = frappe.db.sql("""
+            SELECT s.can_alter_ledger
+            FROM `tabsupport_team_supervisor` s
+            JOIN `tabsupport_team_hierarchy` h ON h.name = s.parent
+            WHERE h.enabled = 1 AND s.user = %s
+            ORDER BY s.can_alter_ledger DESC
+            LIMIT 1
+        """, (user,), as_dict=True)
+
+        if sup_record:
+            is_supervisor = True
+            can_alter_amc = bool(sup_record[0].can_alter_ledger)
+
+        # Retrieve dynamic name of the configured AMC supervisor
+        active_sup = frappe.db.sql("""
+            SELECT COALESCE(NULLIF(TRIM(u.full_name), ''), s.user) as sup_name
+            FROM `tabsupport_team_supervisor` s
+            JOIN `tabsupport_team_hierarchy` h ON h.name = s.parent
+            LEFT JOIN `tabUser` u ON u.name = s.user
+            WHERE h.enabled = 1 AND s.can_alter_ledger = 1
+            LIMIT 1
+        """, as_dict=True)
+        if active_sup:
+            amc_supervisor_name = active_sup[0].sup_name
+
+        # Check executive row
+        exec_record = frappe.db.sql("""
+            SELECT e.allowed_statuses
+            FROM `tabsupport_team_executive` e
+            JOIN `tabsupport_team_hierarchy` h ON h.name = e.parent
+            WHERE h.enabled = 1 AND e.user = %s
+            LIMIT 1
+        """, (user,), as_dict=True)
+
+        if exec_record:
+            rec = exec_record[0]
+            raw_st = (rec.allowed_statuses or "").strip()
+            if raw_st:
+                allowed_statuses = [s.strip().upper() for s in raw_st.replace(",", "\n").split("\n") if s.strip()]
+
+    except Exception:
+        allowed_statuses = []
+
+    return {
+        "is_admin": "System Manager" in frappe.get_roles(user),
+        "is_owner": False,
+        "is_supervisor": is_supervisor,
+        "only_new_tickets": (allowed_statuses == ["NEW"]),
+        "allowed_statuses": allowed_statuses,
+        "can_alter_amc": can_alter_amc,
+        "can_alter_ledger": True,
+        "can_import_excel": False,
+        "amc_supervisor_name": amc_supervisor_name,
+        "user": user
+    }
+
+
+@frappe.whitelist()
+def get_amc_pending_count():
+    threshold = frappe.utils.add_to_date(frappe.utils.now_datetime(), minutes=-10)
+    return frappe.db.count("support_ticket", filters={
+        "amc_status": "YES",
+        "status": "NEW",
+        "creation": ["<=", threshold]
+    })
+
+
 @frappe.whitelist()
 def get_new_tickets_only():
-    return frappe.utils.cint(
-        frappe.db.get_value(
-            "User",
-            frappe.session.user,
-            "new_tickets_only"
-        ) or 0
+    settings = get_support_user_settings()
+    return 1 if settings.get("only_new_tickets") else 0
+
+
+@frappe.whitelist()
+def get_pending_amc_alerts():
+    user = frappe.session.user
+    if not user or user == "Guest":
+        return []
+
+    settings = get_support_user_settings()
+    is_sup_or_creator = bool(
+        settings.get("is_supervisor")
+        or settings.get("is_owner")
+        or settings.get("is_admin")
+        or settings.get("only_new_tickets")
     )
+
+    threshold = frappe.utils.add_to_date(frappe.utils.now_datetime(), minutes=-20)
+
+    if is_sup_or_creator:
+        # Alert for unassigned AMC tickets or tickets assigned directly to them
+        tickets = frappe.db.sql("""
+            SELECT name, party_name, creation, executive2
+            FROM `tabsupport_ticket`
+            WHERE amc_status = 'YES'
+              AND status = 'NEW'
+              AND creation <= %s
+              AND (executive2 IS NULL OR executive2 = '' OR executive2 = %s)
+            ORDER BY creation ASC
+        """, (threshold, user), as_dict=True)
+    else:
+        # Regular executive: alert for AMC tickets assigned to them
+        tickets = frappe.db.sql("""
+            SELECT name, party_name, creation, executive2
+            FROM `tabsupport_ticket`
+            WHERE amc_status = 'YES'
+              AND status = 'NEW'
+              AND creation <= %s
+              AND executive2 = %s
+            ORDER BY creation ASC
+        """, (threshold, user), as_dict=True)
+
+    now = frappe.utils.now_datetime()
+    results = []
+    for t in tickets:
+        created = frappe.utils.get_datetime(t.creation)
+        mins = int(max(0, (now - created).total_seconds() / 60))
+        results.append({
+            "name": t.name,
+            "party_name": t.party_name or "Unknown Party",
+            "pending_mins": mins,
+            "executive2": t.executive2 or ""
+        })
+
+    return results
 
 
 def get_permission_query_conditions(user):
-    if user == "Administrator":
-        return ""
-
-    new_tickets_only = frappe.utils.cint(
-        frappe.db.get_value("User", user, "new_tickets_only") or 0
-    )
-
-    if new_tickets_only:
-        return "`tabsupport_ticket`.status = 'NEW'"
-
     return ""
 
 # GET TICKET FOLLOWUP HISTORY FOR VIEW DETAILS DIALOG
 
 @frappe.whitelist()
 def get_ticket_followup_history(ticket_name):
+    ticket_name = str(ticket_name or "").strip()
     if not ticket_name:
+        return {}
+
+    if not frappe.db.exists("support_ticket", ticket_name):
         return {}
 
     doc = frappe.get_doc("support_ticket", ticket_name)
 
     return {
         "name": doc.name,
-        "status": doc.status,
-        "creation":doc.creation,
+        "party_name": doc.party_name or "",
+        "contact_name": doc.contact_name or "",
+        "contact_phone": doc.contact_phone or "",
+        "executive": doc.executive or "",
+        "call_source": doc.call_source or "",
+        "call_type": doc.call_type or "",
+        "remarks": doc.remarks or "",
+        "status": doc.status or "",
+        "creation": str(doc.creation or ""),
         "followup_history": [
             {
-                "followup_date": row.followup_date,
-                "followup_time": row.followup_time,
-                "call_type": row.call_type,
-                "remarks": row.remarks,
-                "updated_by": row.updated_by,
-                "updated_on": row.updated_on,
-                "status": row.status,
-                "sub_status": row.sub_status,
-                "sub_sub_status": row.sub_sub_status
+                "followup_date": str(row.followup_date or ""),
+                "followup_time": str(row.followup_time or ""),
+                "call_type": row.call_type or "",
+                "remarks": row.remarks or "",
+                "updated_by": row.updated_by or "",
+                "updated_on": str(row.updated_on or ""),
+                "status": row.status or "",
+                "sub_status": row.sub_status or "",
+                "sub_sub_status": row.sub_sub_status or ""
             }
             for row in doc.followup_history
         ]
     }
 
+
+
+
+def has_app_permission():
+    """Check if current user has permission to access Support Ticket App Switcher card."""
+    return True
+
+
 @frappe.whitelist()
-def get_ticket_contacts(serial_no):
-    serial_no = str(serial_no or "").strip()
-
+def get_tally_renewal_details(serial_no):
     if not serial_no:
-        return []
+        return None
 
-    if not frappe.db.exists("support_ticket_ledger", serial_no):
-        return []
+    serial = str(serial_no).strip()
+    if not serial:
+        return None
 
-    ledger = frappe.get_doc("support_ticket_ledger", serial_no)
+    try:
+        record = frappe.db.sql("""
+            SELECT 
+                cc_acc_name, portal_acc_name,
+                license, license_type,
+                tally_version, product_ver, `release`,
+                acc_expiry_date, portal_expiry_date,
+                partner_name, portal_partner_name,
+                tss_status,
+                cc_mobile, portal_mobile,
+                cc_email, portal_email,
+                account_id,
+                cc_contact, portal_contact
+            FROM `tabHbs Tally Renewal`
+            WHERE tss_tally_serial = %s OR tally_serial = %s
+            ORDER BY modified DESC
+            LIMIT 1
+        """, (serial, serial), as_dict=True)
 
-    return [
-        {
-            "contact_name": contact.contact_name,
-            "contact_phone": contact.contact_phone
+        if not record:
+            return None
+
+        row = record[0]
+        expiry = row.acc_expiry_date or row.portal_expiry_date
+        return {
+            "party_name": row.portal_acc_name or row.cc_acc_name or "",
+            "contact_name": row.portal_contact or row.cc_contact or "",
+            "license_type": row.license or row.license_type or "",
+            "tally_version": row.tally_version or row.get("release") or row.product_ver or "",
+            "tss_expiry_date": str(expiry) if expiry else None,
+            "partner_name": row.portal_partner_name or row.partner_name or "",
+            "tss_status": row.tss_status or "",
+            "mobile": row.portal_mobile or row.cc_mobile or "",
+            "email": row.account_id or row.portal_email or row.cc_email or ""
         }
-        for contact in ledger.contact_details
-    ]
+    except Exception:
+        frappe.log_error("Failed to fetch tally renewal details", "Support Ticket")
+        return None

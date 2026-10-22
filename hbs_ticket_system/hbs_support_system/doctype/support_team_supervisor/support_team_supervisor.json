@@ -1,0 +1,65 @@
+{
+ "actions": [],
+ "creation": "2026-10-18 14:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "user",
+  "user_name",
+  "role_type",
+  "can_alter_ledger"
+ ],
+ "fields": [
+  {
+   "columns": 3,
+   "fieldname": "user",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Reports To User",
+   "options": "User",
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "columns": 3,
+   "fetch_from": "user.full_name",
+   "fieldname": "user_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Name",
+   "read_only": 1
+  },
+  {
+   "columns": 3,
+   "default": "Manager",
+   "fieldname": "role_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Access Permission",
+   "options": "Manager\nSupervisor (Read-Only)",
+   "reqd": 1
+  },
+  {
+   "columns": 2,
+   "default": "0",
+   "fieldname": "can_alter_ledger",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Can Alter Ledger"
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-10-20 19:35:00.000000",
+ "modified_by": "Administrator",
+ "module": "HBS Support System",
+ "name": "support_team_supervisor",
+ "naming_rule": "Autoincrement",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

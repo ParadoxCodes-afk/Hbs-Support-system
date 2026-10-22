@@ -13,9 +13,25 @@
 [data-fieldname="followup_history"] .form-grid .grid-row > .remarks-display {
     display: block;
     width: 100%;
-    padding: 6px 12px 8px 55px;
+    padding: 3px 10px 4px 55px;
     border-bottom: 1px solid var(--border-color);
     white-space: normal;
     overflow-wrap: anywhere;
     font-size: var(--text-sm);
+}
+
+/* AMC Active Highlight */
+.amc-highlight .form-control,
+.amc-highlight .control-value,
+.amc-highlight input,
+.amc-highlight select {
+    background-color: #dcfce7 !important;
+    border: 1.5px solid #16a34a !important;
+    color: #15803d !important;
+    font-weight: 600 !important;
+}
+
+.amc-highlight .control-label {
+    color: #15803d !important;
+    font-weight: 600 !important;
 }

@@ -1,5 +1,5 @@
 app_name = "hbs_ticket_system"
-app_title = "HBS Support System"
+app_title = "Support Ticket"
 app_publisher = "HBS"
 app_description = "HBS Support System"
 app_email = "hbstest09@gmail.com"
@@ -15,15 +15,15 @@ permission_query_conditions = {
 # required_apps = []
 
 # Each item in the list will be shown as an app in the apps page
-# add_to_apps_screen = [
-# 	{
-# 		"name": "hbs_ticket_system",
-# 		"logo": "/assets/hbs_ticket_system/logo.png",
-# 		"title": "HBS Support System",
-# 		"route": "/hbs_ticket_system",
-# 		"has_permission": "hbs_ticket_system.api.permission.has_app_permission"
-# 	}
-# ]
+add_to_apps_screen = [
+	{
+		"name": "hbs_ticket_system",
+		"logo": "/assets/hbs_ticket_system/images/support_ticket_logo.svg",
+		"title": "Support Ticket",
+		"route": "/app/support-ticket",
+		"has_permission": "hbs_ticket_system.hbs_support_system.doctype.support_ticket.support_ticket.has_app_permission"
+	}
+]
 
 # Includes in <head>
 # ------------------
@@ -90,7 +90,8 @@ app_include_css = "/assets/hbs_ticket_system/css/hbs_ticket_system.css"
 # ------------
 
 # before_install = "hbs_ticket_system.install.before_install"
-# after_install = "hbs_ticket_system.install.after_install"
+# after_install = "hbs_ticket_system.setup.setup_custom_fields"
+# after_migrate = "hbs_ticket_system.setup.setup_custom_fields"
 
 # Uninstallation
 # ------------
@@ -141,9 +142,9 @@ app_include_css = "/assets/hbs_ticket_system/css/hbs_ticket_system.css"
 # }
 #
 
-has_permission = {
- 	"Event": "frappe.desk.doctype.event.event.has_permission",
-}
+# has_permission = {
+#  	"Event": "frappe.desk.doctype.event.event.has_permission",
+# }
 
 
 # Document Events
@@ -195,13 +196,10 @@ has_permission = {
 # Overriding Methods
 # ------------------------------
 #
-override_whitelisted_methods = {
-    "frappe.desk.reportview.get":
-        "hbs_ticket_system.hbs_support_system.support_ticket_reportview.get",
-
-    "frappe.desk.reportview.get_list":
-        "hbs_ticket_system.hbs_support_system.support_ticket_reportview.get_list",
-}
+# override_whitelisted_methods = {
+#     "frappe.desk.reportview.get": "hbs_ticket_system.hbs_support_system.support_ticket_reportview.get",
+#     "frappe.desk.reportview.get_list": "hbs_ticket_system.hbs_support_system.support_ticket_reportview.get_list",
+# }
 #
 # each overriding function accepts a `data` argument;
 # generated from the base implementation of the doctype dashboard,

@@ -20,22 +20,36 @@ frappe.ui.form.on('support_ticket', {
             frm.set_df_property('remarks', 'reqd', 0);
             frm.set_df_property('call_source', 'read_only', 1);
             frm.set_df_property('call_type', 'read_only', 1);
-            frm.set_df_property('executive', 'read_only', 1);
-            frm.set_df_property('executive2', 'read_only', 1);
-
+        } else if (frm.fields_dict.remarks && frm.fields_dict.remarks.$wrapper) {
+            frm.fields_dict.remarks.$wrapper.find('textarea').css({
+                'height': '40px',
+                'min-height': '40px'
+            });
         }
 
         ['call_source', 'call_type', 'executive', 'executive2']
             .forEach(field => frm.set_df_property(field, 'only_select', 1));
 
+        // EXECUTIVE & CONTACT FIELDS EDITABLE SO COLLEAGUES CAN TAKE OVER / UPDATE CALLS
+        frm.set_df_property('executive', 'read_only', 0);
+        frm.set_df_property('executive2', 'read_only', 0);
+        frm.set_df_property('contact_name', 'read_only', 0);
+        frm.set_df_property('contact_phone', 'read_only', 0);
 
-        // AMC EXPIRY DATE
-        frm.toggle_display(
-            'amc_expiry_date',
-            frm.doc.amc_status !== 'NO'
-        );
 
-        setTimeout(() => show_followup_remarks(frm), 500);
+        // AMC HIGHLIGHT & EXPIRY VISIBILITY
+        highlight_amc_fields(frm);
+
+        set_party_details_state(frm);
+
+        // Auto-fetch renewal details if missing on refresh without popup
+        if (frm.doc.serial_no && !frm.doc.renewal_party_name && !frm.doc.renewal_license_type) {
+            fetch_tally_renewal_details(frm, false);
+        }
+
+        render_followup_timeline(frm);
+
+        setup_live_ticket_timer(frm);
 
         // DISABLE OPEN LINK OPTION
         setTimeout(() => {
@@ -65,137 +79,66 @@ frappe.ui.form.on('support_ticket', {
                 });
         }, 500);
 
-    // ADD CONTACTS BUTTON - CREATE MODE ONLY
-
-        if (frm.is_new()) {
-            frm.add_custom_button('Add Contacts', async function () {
-            if (!frm.doc.serial_no) {
-                frappe.msgprint('Please select Serial No first.');
-                return;
+        // Click on Serial No input opens autofill dialog (just like in HBS CRM Lead)
+        if (frm.fields_dict.serial_no) {
+            frm.fields_dict.serial_no.df.options = null;
+            if (frm.fields_dict.serial_no.awesomplete) {
+                try {
+                    frm.fields_dict.serial_no.awesomplete.destroy();
+                } catch (e) {}
+                frm.fields_dict.serial_no.awesomplete = null;
             }
-
-            // Open dialog immediately
-            let contacts = [];
-
-            let d = new frappe.ui.Dialog({
-                title: 'Select or Add Contact',
-                fields: [
-                    {
-                        fieldname: 'contact_mode',
-                        label: 'Contact',
-                        fieldtype: 'Select',
-                        options: [
-                            'Select Existing Contact',
-                            'Add New Contact'
-                        ],
-                        default: 'Add New Contact',
-                        reqd: 1,
-                        onchange: function () {
-                            const existing =
-                                d.get_value('contact_mode') === 'Select Existing Contact';
-
-                            d.set_df_property('existing_contact', 'hidden', !existing);
-                            d.set_df_property('new_contact_name', 'hidden', existing);
-                            d.set_df_property('new_contact_phone', 'hidden', existing);
+            if (frm.fields_dict.serial_no.$input) {
+                frm.fields_dict.serial_no.$input
+                    .attr('autocomplete', 'off')
+                    .attr('data-lpignore', 'true')
+                    .attr('placeholder', __('Click to Autofill from Ledger...'))
+                    .off('focus.autocomplete input.autocomplete keydown.autocomplete')
+                    .off('click.open_autofill')
+                    .on('click.open_autofill', function () {
+                        if (frm.is_new()) {
+                            open_autofill_dialog(frm);
                         }
-                    },
-                    {
-                        fieldname: 'existing_contact',
-                        label: 'Existing Contact',
-                        fieldtype: 'Autocomplete',
-                        options: '',
-                        hidden: true
-                    },
-                    {
-                        fieldname: 'new_contact_name',
-                        label: 'Contact Name',
-                        fieldtype: 'Data'
-                    },
-                    {
-                        fieldname: 'new_contact_phone',
-                        label: 'Contact Phone',
-                        fieldtype: 'Data'
-                    }
-                ],
-                primary_action_label: 'Submit',
-                primary_action: async function (values) {
-                    let name = '';
-                    let phone = '';
-
-                    if (values.contact_mode === 'Select Existing Contact') {
-                        const selected = contacts.find(c =>
-                            `${c.contact_name || ''} - ${c.contact_phone || ''}` ===
-                            values.existing_contact
-                        );
-
-                        if (!selected) {
-                            frappe.msgprint('Please select an existing contact.');
-                            return;
-                        }
-
-                        name = selected.contact_name || '';
-                        phone = selected.contact_phone || '';
-                    } else {
-                        name = (values.new_contact_name || '').trim();
-                        phone = (values.new_contact_phone || '').trim();
-
-                        if (!name || !phone) {
-                            frappe.msgprint('Please enter both contact name and phone.');
-                            return;
-                        }
-                    }
-
-                    await frm.set_value('contact_name', name);
-                    await frm.set_value('contact_phone', phone);
-
-                    d.hide();
-                }
-            });
-
-            d.show();
-
-            // Load contacts after opening the dialog
-            try {
-                const r = await frappe.call({
-                    method: 'hbs_ticket_system.hbs_support_system.doctype.support_ticket.support_ticket.get_ticket_contacts',
-                    args: {
-                        serial_no: frm.doc.serial_no
-                    }
-                });
-
-                contacts = r.message || [];
-
-                if (contacts.length) {
-                    const options = contacts.map(c =>
-                        `${c.contact_name || ''} - ${c.contact_phone || ''}`
-                    ).join('\n');
-
-                    d.set_df_property('existing_contact', 'options', options);
-                    d.set_df_property('contact_mode', 'options', [
-                        'Select Existing Contact',
-                        'Add New Contact'
-                    ]);
-
-                    d.set_value('contact_mode', 'Select Existing Contact');
-                } else {
-                    d.set_value('contact_mode', 'Add New Contact');
-                }
-
-                d.fields_dict.contact_mode.df.onchange();
-            } catch (e) {
-                console.error(e);
-                frappe.msgprint('Unable to load contacts.');
+                    });
             }
-        });
-
         }
 
+        // Click on Executive2 field opens workload-based selection dialog directly (disabling Awesomplete dropdown)
+        if (frm.fields_dict.executive2) {
+            if (frm.is_new()) {
+                if (frm.fields_dict.executive2.awesomplete) {
+                    try {
+                        frm.fields_dict.executive2.awesomplete.destroy();
+                    } catch (e) {}
+                    frm.fields_dict.executive2.awesomplete = null;
+                }
+                if (frm.fields_dict.executive2.$input) {
+                    frm.fields_dict.executive2.$input
+                        .attr('autocomplete', 'off')
+                        .attr('data-lpignore', 'true')
+                        .attr('placeholder', __('Click to select executive by workload...'))
+                        .off('focus.autocomplete input.autocomplete keydown.autocomplete focus.awesomplete')
+                        .off('mousedown.open_exec_dlg click.open_exec_dlg focus.open_exec_dlg')
+                        .on('mousedown.open_exec_dlg click.open_exec_dlg', function (e) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            this.blur();
+                            open_executive_selection_dialog(frm);
+                        });
+                }
+            }
+        }
 
-        /////End contact button new
+        // AUTOFILL BUTTON - CREATE MODE ONLY
+        if (frm.is_new()) {
+            let autofill_btn = frm.add_custom_button('Autofill Details', function () {
+                open_autofill_dialog(frm);
+            });
+            autofill_btn.addClass('btn-primary');
+        }
 
         // CUSTOM BUTTONS ONLY FOR EXISTING TICKETS
         if (!frm.is_new()) {
-
             // TRANSFER CALL
             frm.add_custom_button('Transfer Call', function () {
                 let dialog = new frappe.ui.Dialog({
@@ -600,6 +543,12 @@ frappe.ui.form.on('support_ticket', {
                 setTimeout(() => {
                     dialog.fields_dict.call_type.$wrapper.find('.btn-open').remove();
                     dialog.fields_dict.status.$wrapper.find('.btn-open').remove();
+                    if (dialog.fields_dict.remarks && dialog.fields_dict.remarks.$wrapper) {
+                        dialog.fields_dict.remarks.$wrapper.find('textarea').css({
+                            'height': '44px',
+                            'min-height': '44px'
+                        });
+                    }
                 }, 100);
 
                 dialog.set_df_property('pending_status', 'hidden', 1);
@@ -626,66 +575,30 @@ frappe.ui.form.on('support_ticket', {
 
     // AMC STATUS
     amc_status(frm) {
-        frm.toggle_display('amc_expiry_date', frm.doc.amc_status !== 'NO');
+        highlight_amc_fields(frm);
     },
 
-    // SERIAL NO SELECTED
-    
-    async serial_no(frm) {
-        const serialNo = frm.doc.serial_no;
-        // Prevent an older request from overwriting newer details
-        const requestId = (frm._contactLoadRequestId || 0) + 1;
-        frm._contactLoadRequestId = requestId;
+    // AMC EXPIRY DATE
+    amc_expiry_date(frm) {
+        highlight_amc_fields(frm);
+    },
 
-
-        // Refresh history for the newly selected serial
+    // SERIAL NO CHANGED
+    serial_no(frm) {
         load_call_history(frm);
 
-        if (!serialNo) {
-            await frm.set_value('party_name', '');
-            await frm.set_value('email', '');
-            await frm.set_value('amc_status', '');
-            await frm.set_value('amc_expiry_date', '');
-            await frm.set_value('priority', '');
-            await frm.set_value('contact_name', '');
-            await frm.set_value('contact_phone', '');
-            return;
-        }
-
-        try {
-            const ledger = await frappe.db.get_doc(
-                'support_ticket_ledger',
-                serialNo
-            );
-
-            // Ignore response if Serial No has changed
-            if (
-                frm._contactLoadRequestId !== requestId ||
-                frm.doc.serial_no !== serialNo
-            ) {
-                return;
-            }
-
-            await frm.set_value('party_name', ledger.party_name || '');
-            await frm.set_value('email', ledger.email || '');
-            await frm.set_value('amc_status', ledger.amc_status || '');
-            await frm.set_value('amc_expiry_date',ledger.amc_expiry_date || '');
-            await frm.set_value('priority',ledger.amc_status === 'YES' ? 'P1' : 'P2');
-
-            const contacts = ledger.contact_details || [];
-
-            // Auto-fill the last available contact
-            const lastContact = contacts.length
-                ? contacts[contacts.length - 1]
-                : {};
-            
-            await frm.set_value('contact_name',lastContact.contact_name || '');
-            await frm.set_value('contact_phone',lastContact.contact_phone || '');
-        } catch (error) {
-            if (frm._contactLoadRequestId !== requestId || frm.doc.serial_no !== serialNo) return;
-
-            console.error(error);
-            frappe.msgprint('Unable to load the selected Serial No details.');
+        if (!frm.doc.serial_no) {
+            frm.set_value('party_name', '');
+            frm.set_value('email', '');
+            frm.set_value('amc_status', '');
+            frm.set_value('amc_expiry_date', '');
+            frm.set_value('priority', '');
+            frm.set_value('contact_name', '');
+            frm.set_value('contact_phone', '');
+            highlight_amc_fields(frm);
+            clear_renewal_fields(frm);
+        } else {
+            fetch_tally_renewal_details(frm, true);
         }
     },
 
@@ -693,6 +606,17 @@ frappe.ui.form.on('support_ticket', {
     async validate(frm) {
         if (!frm.doc.serial_no) {
             frappe.msgprint('Please select Serial No.');
+            frappe.validated = false;
+            return;
+        }
+
+        const serial = String(frm.doc.serial_no).trim();
+        if (!is_genuine_tally_serial(serial)) {
+            frappe.msgprint({
+                title: __('Invalid Serial Number'),
+                indicator: 'red',
+                message: __('Invalid Serial Number')
+            });
             frappe.validated = false;
             return;
         }
@@ -756,6 +680,703 @@ frappe.ui.form.on('support_ticket', {
 
 
 // ==========================================================
+// EXECUTIVE SELECTION DIALOG (BY WORKLOAD SORTING)
+// ==========================================================
+function open_executive_selection_dialog(frm) {
+    let executives_list = [];
+
+    let d = new frappe.ui.Dialog({
+        title: __('Select Executive (Today\'s Workload)'),
+        size: 'large',
+        fields: [
+            {
+                fieldname: 'search_query',
+                label: __('Search Executive'),
+                fieldtype: 'Data',
+                placeholder: __('Search executive by name or email...'),
+                description: __('Shows tickets created today. Executives with the fewest tickets appear on top.')
+            },
+            {
+                fieldname: 'executives_area',
+                fieldtype: 'HTML'
+            }
+        ],
+        primary_action_label: __('Close'),
+        primary_action: function () {
+            d.hide();
+        }
+    });
+
+    function render_table(list) {
+        const $area = d.fields_dict.executives_area.$wrapper;
+        if (!list || !list.length) {
+            $area.html('<div class="text-muted text-center" style="padding: 24px;">No active executives found.</div>');
+            return;
+        }
+
+        const esc = v => frappe.utils.escape_html(String(v || ''));
+
+        let html = `
+            <div style="max-height: 420px; overflow-y: auto; margin-top: 10px; border: 1px solid var(--border-color, #e2e8f0); border-radius: 6px;">
+                <table class="table table-bordered table-hover" style="font-size: 13px; margin-bottom: 0;">
+                    <thead style="position: sticky; top: 0; background: var(--bg-light-gray, #f8f9fa); z-index: 1;">
+                        <tr>
+                            <th style="width: 44%;">Executive</th>
+                            <th style="width: 20%; text-align: center;">NEW</th>
+                            <th style="width: 20%; text-align: center;">FOLLOWUP</th>
+                            <th style="width: 16%; text-align: center;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        list.forEach((exec, idx) => {
+            const isAssigned = (frm.doc.executive2 === exec.name);
+            const rowBg = isAssigned ? 'background: #eff6ff;' : '';
+
+            html += `
+                <tr style="cursor: pointer; ${rowBg}" class="executive-row" data-name="${esc(exec.name)}" data-full-name="${esc(exec.full_name)}">
+                    <td>
+                        <b style="color: #1e293b;">${esc(exec.full_name)}</b>
+                        <div style="font-size: 11.5px; color: #64748b;">${esc(exec.name)}</div>
+                    </td>
+                    <td style="text-align: center; vertical-align: middle;">
+                        <span style="display: inline-block; min-width: 28px; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 12px; background: #e0e7ff; color: #3730a3; border: 1px solid #c7d2fe;">
+                            ${exec.new_count}
+                        </span>
+                    </td>
+                    <td style="text-align: center; vertical-align: middle;">
+                        <span style="display: inline-block; min-width: 28px; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 12px; background: #fef3c7; color: #92400e; border: 1px solid #fde68a;">
+                            ${exec.followup_count}
+                        </span>
+                    </td>
+                    <td style="text-align: center; vertical-align: middle;">
+                        <button type="button" class="btn btn-xs ${isAssigned ? 'btn-success' : 'btn-primary'} btn-select-exec" data-name="${esc(exec.name)}" data-full-name="${esc(exec.full_name)}">
+                            ${isAssigned ? '✓ Selected' : 'Select'}
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+
+        html += `
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        $area.html(html);
+
+        async function pick_executive(user_id, full_name) {
+            await frm.set_value('executive2', user_id);
+            d.hide();
+            frappe.show_alert({
+                message: __('Assigned Executive 2: {0}', [full_name || user_id]),
+                indicator: 'green'
+            });
+        }
+
+        $area.find('.btn-select-exec').on('click', function (e) {
+            e.stopPropagation();
+            const u = $(this).data('name');
+            const fn = $(this).data('full-name');
+            pick_executive(u, fn);
+        });
+
+        $area.find('.executive-row').on('click', function () {
+            const u = $(this).data('name');
+            const fn = $(this).data('full-name');
+            pick_executive(u, fn);
+        });
+    }
+
+    d.fields_dict.executives_area.$wrapper.html(
+        '<div class="text-muted text-center" style="padding: 24px;">Loading executive workloads...</div>'
+    );
+    d.show();
+
+    frappe.call({
+        method: 'hbs_ticket_system.hbs_support_system.doctype.support_ticket.support_ticket.get_executive_workload',
+        callback: function (r) {
+            executives_list = r.message || [];
+            render_table(executives_list);
+
+            d.fields_dict.search_query.$input.off('input.filter_exec').on('input.filter_exec', function () {
+                const q = $(this).val().toLowerCase().trim();
+                if (!q) {
+                    render_table(executives_list);
+                    return;
+                }
+                const filtered = executives_list.filter(e =>
+                    (e.full_name || '').toLowerCase().includes(q) ||
+                    (e.name || '').toLowerCase().includes(q)
+                );
+                render_table(filtered);
+            });
+        }
+    });
+}
+
+
+// ==========================================================
+// AMC HIGHLIGHT CONTROL
+// ==========================================================
+function highlight_amc_fields(frm) {
+    const is_amc = frm.doc && frm.doc.amc_status === 'YES';
+    const fields = ['amc_status', 'amc_expiry_date'];
+    const expiry_field = frm.get_field('amc_expiry_date');
+
+    if (is_amc && frm.doc.amc_expiry_date) {
+        const diff = frappe.datetime.get_diff(frm.doc.amc_expiry_date, frappe.datetime.nowdate());
+        let bg = '#dcfce7';
+        let border = '1.5px solid #16a34a';
+        let text_color = '#15803d';
+        let desc = '';
+
+        if (diff < 0) {
+            // Expired
+            bg = '#fee2e2';
+            border = '1.5px solid #dc2626';
+            text_color = '#dc2626';
+            desc = `<span style="color: #dc2626; font-weight: 600;">❌ AMC Expired on ${frappe.datetime.str_to_user(frm.doc.amc_expiry_date)} (${Math.abs(diff)} days ago). Renewal pending!</span>`;
+        } else if (diff <= 15) {
+            // Expiring soon (<= 15 days)
+            bg = '#fef3c7';
+            border = '1.5px solid #d97706';
+            text_color = '#b45309';
+            desc = `<span style="color: #b45309; font-weight: 600;">⚠️ AMC is expiring in ${diff} day${diff === 1 ? '' : 's'} on ${frappe.datetime.str_to_user(frm.doc.amc_expiry_date)}.</span>`;
+        }
+
+        fields.forEach(f => {
+            const field = frm.get_field(f);
+            if (field && field.$wrapper) {
+                const $control = field.$wrapper.find('.form-control, .control-value, input, select');
+                const $label = field.$wrapper.find('.control-label');
+                field.$wrapper.addClass('amc-highlight');
+                $control.css({
+                    'background-color': bg,
+                    'border': border,
+                    'color': text_color,
+                    'font-weight': '600'
+                });
+                $label.css({
+                    'color': text_color,
+                    'font-weight': '600'
+                });
+            }
+        });
+
+        if (expiry_field) {
+            expiry_field.set_description(desc);
+        }
+    } else if (is_amc) {
+        // AMC is YES but no expiry date set yet
+        fields.forEach(f => {
+            const field = frm.get_field(f);
+            if (field && field.$wrapper) {
+                const $control = field.$wrapper.find('.form-control, .control-value, input, select');
+                const $label = field.$wrapper.find('.control-label');
+                field.$wrapper.addClass('amc-highlight');
+                $control.css({
+                    'background-color': '#dcfce7',
+                    'border': '1.5px solid #16a34a',
+                    'color': '#15803d',
+                    'font-weight': '600'
+                });
+                $label.css({
+                    'color': '#15803d',
+                    'font-weight': '600'
+                });
+            }
+        });
+        if (expiry_field) {
+            expiry_field.set_description('');
+        }
+    } else {
+        fields.forEach(f => {
+            const field = frm.get_field(f);
+            if (field && field.$wrapper) {
+                const $control = field.$wrapper.find('.form-control, .control-value, input, select');
+                const $label = field.$wrapper.find('.control-label');
+                field.$wrapper.removeClass('amc-highlight');
+                $control.css({
+                    'background-color': '',
+                    'border': '',
+                    'color': '',
+                    'font-weight': ''
+                });
+                $label.css({
+                    'color': '',
+                    'font-weight': ''
+                });
+            }
+        });
+        if (expiry_field) {
+            expiry_field.set_description('');
+        }
+    }
+
+    frm.toggle_display('amc_expiry_date', Boolean(is_amc || (frm.doc && frm.doc.amc_status && frm.doc.amc_status !== 'NO')));
+}
+
+
+// ==========================================================
+// PARTY DETAILS READ-ONLY / EDITABLE CONTROL
+// ==========================================================
+function set_party_details_state(frm) {
+    if (!frm.is_new()) {
+        // For existing tickets, serial_no is always locked.
+        frm.set_df_property('serial_no', 'read_only', 1);
+
+        // Check user permission to alter ledger/party info
+        if (frappe.session.user === 'Administrator') {
+            frm.set_df_property('party_name', 'read_only', 0);
+            frm.set_df_property('email', 'read_only', 0);
+            frm.set_df_property('contact_name', 'read_only', 0);
+            frm.set_df_property('contact_phone', 'read_only', 0);
+            return;
+        }
+
+        frappe.call({
+            method: 'hbs_ticket_system.hbs_support_system.doctype.support_ticket.support_ticket.get_support_user_settings',
+            callback: function(r) {
+                const settings = r.message || {};
+                const can_edit = Boolean(settings.can_alter_ledger || settings.is_admin || settings.is_owner);
+                frm.set_df_property('party_name', 'read_only', can_edit ? 0 : 1);
+                frm.set_df_property('email', 'read_only', can_edit ? 0 : 1);
+                frm.set_df_property('contact_name', 'read_only', can_edit ? 0 : 1);
+                frm.set_df_property('contact_phone', 'read_only', can_edit ? 0 : 1);
+            }
+        });
+        return;
+    }
+
+    // Creating new ticket
+    const has_autofilled = Boolean(frm.doc.serial_no && frm.doc.party_name);
+
+    if (!has_autofilled) {
+        // Initial state before autofill: party fields are read-only
+        frm.set_df_property('serial_no', 'read_only', 0);
+        frm.set_df_property('party_name', 'read_only', 1);
+        frm.set_df_property('email', 'read_only', 1);
+        frm.set_df_property('contact_name', 'read_only', 1);
+        frm.set_df_property('contact_phone', 'read_only', 1);
+
+        ['party_name', 'email', 'contact_name', 'contact_phone'].forEach(f => {
+            let field = frm.get_field(f);
+            if (field && field.$wrapper) {
+                field.$wrapper.find('input').css({
+                    'background-color': 'var(--control-bg-read-only, #f8fafc)',
+                    'cursor': 'not-allowed'
+                });
+            }
+        });
+    } else {
+        // After autofill: serial_no is locked, party details editable
+        frm.set_df_property('serial_no', 'read_only', 1);
+        frm.set_df_property('party_name', 'read_only', 0);
+        frm.set_df_property('email', 'read_only', 0);
+        frm.set_df_property('contact_name', 'read_only', 0);
+        frm.set_df_property('contact_phone', 'read_only', 0);
+
+        ['party_name', 'email', 'contact_name', 'contact_phone'].forEach(f => {
+            let field = frm.get_field(f);
+            if (field && field.$wrapper) {
+                field.$wrapper.find('input').css({
+                    'background-color': '',
+                    'cursor': ''
+                });
+            }
+        });
+    }
+}
+
+
+// ==========================================================
+// AUTOFILL DETAILS FROM LEDGER (MULTI-CONTACT)
+// ==========================================================
+function open_autofill_dialog(frm) {
+    let search_timer = null;
+    let current_results = [];
+
+    let d = new frappe.ui.Dialog({
+        title: __('Autofill Details from Ledger'),
+        size: 'large',
+        fields: [
+            {
+                fieldname: 'search_query',
+                label: __('Search Ledger'),
+                fieldtype: 'Data',
+                placeholder: __('Search by Serial No, Company Name, Contact Name, or Phone...'),
+                description: __('Type to search. If a ledger has multiple contacts, each contact is displayed on a separate row.')
+            },
+            {
+                fieldname: 'results_area',
+                fieldtype: 'HTML'
+            }
+        ],
+        secondary_action_label: __('➕ Add Customer / Ledger'),
+        secondary_action: function () {
+            const current_q = d.get_value('search_query') || '';
+            open_quick_add_ledger_dialog(frm, d, current_q);
+        }
+    });
+
+    function render_results(results) {
+        current_results = results || [];
+        const $area = d.fields_dict.results_area.$wrapper;
+
+        if (!current_results.length) {
+            $area.html(`
+                <div class="text-muted text-center" style="padding: 24px;">
+                    <p style="font-size: 14px; margin-bottom: 12px;">No matching ledger records found.</p>
+                    <button type="button" class="btn btn-sm btn-primary btn-quick-add-from-empty" style="display: none;">
+                        ➕ Add New Customer / Ledger
+                    </button>
+                </div>
+            `);
+
+            // Only show Add New Customer if user has permission
+            frappe.call({
+                method: 'hbs_ticket_system.hbs_support_system.doctype.support_ticket.support_ticket.get_support_user_settings',
+                callback: function(r) {
+                    const settings = r.message || {};
+                    if (settings.can_alter_ledger || settings.is_admin || settings.is_owner) {
+                        $area.find('.btn-quick-add-from-empty').show();
+                    }
+                }
+            });
+
+            $area.find('.btn-quick-add-from-empty').on('click', function () {
+                const current_q = d.get_value('search_query') || '';
+                open_quick_add_ledger_dialog(frm, d, current_q);
+            });
+            return;
+        }
+
+        const esc = v => frappe.utils.escape_html(String(v || ''));
+
+        let html = `
+            <div style="max-height: 400px; overflow-y: auto; margin-top: 10px; border: 1px solid var(--border-color); border-radius: 4px;">
+                <table class="table table-bordered table-hover" style="font-size: 13px; margin-bottom: 0;">
+                    <thead style="position: sticky; top: 0; background: var(--bg-light-gray, #f8f9fa); z-index: 1;">
+                        <tr>
+                            <th style="width: 15%;">Serial No</th>
+                            <th style="width: 25%;">Company Name</th>
+                            <th style="width: 20%;">Contact Person</th>
+                            <th style="width: 18%;">Phone</th>
+                            <th style="width: 12%;">AMC</th>
+                            <th style="width: 10%; text-align: center;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        current_results.forEach((row, idx) => {
+            const amcBadge = row.amc_status === 'YES'
+                ? `<span class="indicator-pill green" style="font-size: 11px;">YES</span>`
+                : `<span class="indicator-pill gray" style="font-size: 11px;">NO</span>`;
+
+            const contactDisplay = row.contact_name
+                ? `<b>${esc(row.contact_name)}</b>`
+                : `<span class="text-muted" style="font-style: italic;">No Contact</span>`;
+
+            const phoneDisplay = row.contact_phone
+                ? esc(row.contact_phone)
+                : `<span class="text-muted">-</span>`;
+
+            html += `
+                <tr>
+                    <td><b>${esc(row.serial_no)}</b></td>
+                    <td>${esc(row.party_name)}</td>
+                    <td>${contactDisplay}</td>
+                    <td>${phoneDisplay}</td>
+                    <td>${amcBadge}</td>
+                    <td style="text-align: center;">
+                        <button type="button" class="btn btn-xs btn-primary btn-select-ledger" data-idx="${idx}">
+                            Select
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+
+        html += `
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        $area.html(html);
+
+        $area.find('.btn-select-ledger').on('click', async function () {
+            const idx = $(this).data('idx');
+            const row = current_results[idx];
+            if (!row) return;
+
+            await frm.set_value('serial_no', row.serial_no);
+            await frm.set_value('party_name', row.party_name || '');
+            await frm.set_value('email', row.email || '');
+            await frm.set_value('amc_status', row.amc_status || 'NO');
+            await frm.set_value('amc_expiry_date', row.amc_expiry_date || '');
+            await frm.set_value('priority', row.amc_status === 'YES' ? 'P1' : 'P2');
+            await frm.set_value('contact_name', row.contact_name || '');
+            await frm.set_value('contact_phone', row.contact_phone || '');
+
+            highlight_amc_fields(frm);
+            set_party_details_state(frm);
+
+            load_call_history(frm);
+
+            d.hide();
+
+            frappe.show_alert({
+                message: __('Autofilled details for {0} ({1})', [row.serial_no, row.party_name || '']),
+                indicator: 'green'
+            });
+        });
+    }
+
+    function do_search(query) {
+        d.fields_dict.results_area.$wrapper.html(
+            '<div class="text-muted text-center" style="padding: 18px;">Searching ledger...</div>'
+        );
+
+        frappe.call({
+            method: 'hbs_ticket_system.hbs_support_system.doctype.support_ticket.support_ticket.search_ledger_contacts',
+            args: { query: query || '' },
+            callback: function (r) {
+                render_results(r.message || []);
+            }
+        });
+    }
+
+    d.show();
+
+    // Initial search: load entries
+    do_search('');
+
+    // Debounced search on input
+    const $input = d.fields_dict.search_query.$input;
+    $input.focus();
+    $input.on('input', function () {
+        clearTimeout(search_timer);
+        const q = $(this).val();
+        search_timer = setTimeout(() => do_search(q), 300);
+    });
+}
+
+
+// ==========================================================
+// QUICK ADD CUSTOMER / LEDGER MODAL DIALOG
+// ==========================================================
+function open_quick_add_ledger_dialog(frm, parent_dialog, prefill_query) {
+    let prefill_serial = '';
+    let prefill_name = '';
+
+    if (prefill_query) {
+        const trimmed = String(prefill_query).trim();
+        if (/^\d{1,9}$/.test(trimmed)) {
+            prefill_serial = trimmed;
+        } else {
+            prefill_name = trimmed;
+        }
+    }
+
+    let add_d = new frappe.ui.Dialog({
+        title: __('➕ Add New Customer / Ledger'),
+        size: 'small',
+        fields: [
+            {
+                fieldname: 'serial_no',
+                label: __('Serial No'),
+                fieldtype: 'Data',
+                reqd: 1,
+                length: 9,
+                default: prefill_serial,
+                description: __('Exactly 9 digits required')
+            },
+            {
+                fieldname: 'party_name',
+                label: __('Company / Customer Name'),
+                fieldtype: 'Data',
+                reqd: 1,
+                default: prefill_name
+            },
+            {
+                fieldname: 'contact_name',
+                label: __('Contact Person Name'),
+                fieldtype: 'Data',
+                reqd: 1
+            },
+            {
+                fieldname: 'contact_phone',
+                label: __('Contact Phone'),
+                fieldtype: 'Data',
+                reqd: 1
+            },
+            {
+                fieldname: 'email',
+                label: __('Email'),
+                fieldtype: 'Data'
+            },
+            {
+                fieldname: 'amc_status',
+                label: __('AMC Status'),
+                fieldtype: 'Select',
+                options: ['NO', 'YES'],
+                default: 'NO',
+                reqd: 1,
+                onchange: function () {
+                    const isYes = add_d.get_value('amc_status') === 'YES';
+                    add_d.set_df_property('amc_expiry_date', 'hidden', !isYes);
+                    add_d.set_df_property('amc_expiry_date', 'reqd', isYes ? 1 : 0);
+                }
+            },
+            {
+                fieldname: 'amc_expiry_date',
+                label: __('AMC Expiry Date'),
+                fieldtype: 'Date',
+                hidden: 1
+            }
+        ],
+        primary_action_label: __('Save & Autofill Ticket'),
+        primary_action: function (values) {
+            const serial_no = (values.serial_no || '').trim();
+            const party_name = (values.party_name || '').trim();
+            const contact_name = (values.contact_name || '').trim();
+            const contact_phone = (values.contact_phone || '').trim();
+            const email = (values.email || '').trim();
+            const amc_status = values.amc_status || 'NO';
+            const amc_expiry_date = values.amc_expiry_date || null;
+
+            if (!is_genuine_tally_serial(serial_no)) {
+                frappe.msgprint({
+                    title: __('Invalid Serial Number'),
+                    indicator: 'red',
+                    message: __('Invalid Serial Number')
+                });
+                return;
+            }
+            if (!party_name) {
+                frappe.msgprint(__('Company / Customer Name is required.'));
+                return;
+            }
+            if (!contact_name || !contact_phone) {
+                frappe.msgprint(__('Contact Name and Contact Phone are required.'));
+                return;
+            }
+            if (amc_status === 'YES' && !amc_expiry_date) {
+                frappe.msgprint(__('AMC Expiry Date is required when AMC Status is YES.'));
+                return;
+            }
+
+            frappe.call({
+                method: 'hbs_ticket_system.hbs_support_system.doctype.support_ticket.support_ticket.create_ledger_entry',
+                args: {
+                    serial_no: serial_no,
+                    party_name: party_name,
+                    contact_name: contact_name,
+                    contact_phone: contact_phone,
+                    email: email,
+                    amc_status: amc_status,
+                    amc_expiry_date: amc_expiry_date
+                },
+                freeze: true,
+                freeze_message: __('Creating Ledger entry...'),
+                callback: async function (r) {
+                    if (r.exc || !r.message) return;
+
+                    const res = r.message;
+                    await frm.set_value('serial_no', res.serial_no);
+                    await frm.set_value('party_name', res.party_name || '');
+                    await frm.set_value('email', res.email || '');
+                    await frm.set_value('amc_status', res.amc_status || 'NO');
+                    await frm.set_value('amc_expiry_date', res.amc_expiry_date || '');
+                    await frm.set_value('priority', res.amc_status === 'YES' ? 'P1' : 'P2');
+                    await frm.set_value('contact_name', res.contact_name || '');
+                    await frm.set_value('contact_phone', res.contact_phone || '');
+
+                    highlight_amc_fields(frm);
+                    set_party_details_state(frm);
+
+                    load_call_history(frm);
+
+                    add_d.hide();
+                    if (parent_dialog) {
+                        parent_dialog.hide();
+                    }
+
+                    frappe.show_alert({
+                        message: __('Customer / Ledger created and ticket autofilled for {0}', [res.serial_no]),
+                        indicator: 'green'
+                    });
+                }
+            });
+        }
+    });
+
+    add_d.show();
+
+    function lookup_and_fill_tally_renewal(sn) {
+        if (!sn || sn.length !== 9) return;
+        frappe.call({
+            method: 'hbs_ticket_system.hbs_support_system.doctype.support_ticket.support_ticket.get_tally_renewal_details',
+            args: { serial_no: sn },
+            callback: function(r) {
+                const data = r.message;
+                if (data) {
+                    if (data.party_name && !add_d.get_value('party_name')) {
+                        add_d.set_value('party_name', data.party_name);
+                    }
+                    if (data.contact_name && !add_d.get_value('contact_name')) {
+                        add_d.set_value('contact_name', data.contact_name);
+                    }
+                    if (data.mobile && !add_d.get_value('contact_phone')) {
+                        add_d.set_value('contact_phone', data.mobile);
+                    }
+                    if (data.email && !add_d.get_value('email')) {
+                        add_d.set_value('email', data.email);
+                    }
+                    frappe.show_alert({
+                        message: __('Auto-filled from HBS Tally Renewal ({0})', [data.party_name || sn]),
+                        indicator: 'green'
+                    }, 4);
+                }
+            }
+        });
+    }
+
+    if (add_d.fields_dict.serial_no && add_d.fields_dict.serial_no.$input) {
+        add_d.fields_dict.serial_no.$input.on('change input', function() {
+            const sn = ($(this).val() || '').trim();
+            if (sn.length === 9) {
+                lookup_and_fill_tally_renewal(sn);
+            }
+        });
+    }
+
+    if (prefill_serial && prefill_serial.length === 9) {
+        lookup_and_fill_tally_renewal(prefill_serial);
+    }
+
+    // Lock AMC fields in quick add for non-supervisors
+    frappe.call({
+        method: 'hbs_ticket_system.hbs_support_system.doctype.support_ticket.support_ticket.get_support_user_settings',
+        callback: function(r) {
+            const settings = r.message || {};
+            const can_alter_amc = Boolean(settings.can_alter_amc || settings.is_owner || settings.is_admin);
+            if (!can_alter_amc) {
+                add_d.set_value('amc_status', 'NO');
+                add_d.set_df_property('amc_status', 'read_only', 1);
+                add_d.set_df_property('amc_expiry_date', 'hidden', 1);
+            }
+        }
+    });
+}
+
+
+// ==========================================================
 // LOAD ROOT CAUSE OPTIONS
 // ==========================================================
 function load_root_causes(dialog) {
@@ -782,34 +1403,131 @@ function load_root_causes(dialog) {
 }
 
 
+function is_genuine_tally_serial(serial) {
+    if (!serial) return true;
+    let s = String(serial).trim();
+    if (s.length !== 9 || !/^\d+$/.test(s)) return false;
+    if (!s.startsWith('7')) return false;
+    let sum = s.split('').reduce((acc, d) => acc + parseInt(d, 10), 0);
+    while (sum >= 10) {
+        sum = String(sum).split('').reduce((acc, d) => acc + parseInt(d, 10), 0);
+    }
+    return sum === 9;
+}
+
+
 // ==========================================================
-// SHOW FOLLOWUP REMARKS IN HISTORY GRID
+// RENDER FOLLOWUP TIMELINE (HBS CRM LEAD FORMAT)
 // ==========================================================
-function show_followup_remarks(frm) {
-    const field = frm.fields_dict.followup_history;
+function get_status_badge(status) {
+    if (!status) return '';
+    const s = String(status).toUpperCase().trim();
+    let bg = '#f1f5f9', color = '#475569', border = '#cbd5e1';
+    if (s.includes('COMPLETED') || s.includes('RESOLVED') || s.includes('CLOSED')) {
+        bg = '#def7ec'; color = '#03543f'; border = '#bcf0da';
+    } else if (s.includes('FOLLOWUP') || s.includes('FOLLOW UP') || s.includes('SCHEDULED')) {
+        bg = '#fef3c7'; color = '#92400e'; border = '#fde68a';
+    } else if (s.includes('PENDING') || s.includes('HOLD') || s.includes('CANCEL')) {
+        bg = '#fee2e2'; color = '#991b1b'; border = '#fecaca';
+    } else if (s.includes('NEW') || s.includes('OPEN')) {
+        bg = '#e0e7ff'; color = '#3730a3'; border = '#c7d2fe';
+    } else if (s.includes('IN PROGRESS') || s.includes('WIP')) {
+        bg = '#e0f2fe'; color = '#075985'; border = '#bae6fd';
+    }
+    return `<span style="background:${bg}; color:${color}; border:1px solid ${border}; padding:2px 8px; border-radius:12px; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.3px;">${frappe.utils.escape_html(s)}</span>`;
+}
 
-    if (!field || !field.grid) return;
+function format_followup_dt(dt) {
+    if (!dt) return '';
+    try {
+        return frappe.datetime.str_to_user(dt);
+    } catch (e) {
+        return dt;
+    }
+}
 
-    const grid = field.grid;
+function build_followup_timeline_html(historyList) {
+    const esc = value => frappe.utils.escape_html(String(value || ''));
+    const list = (historyList || []).slice();
 
-    grid.wrapper.find('.grid-row').each(function () {
-        const gridRow = $(this);
+    if (!list.length) {
+        return '<div style="color: #94a3b8; font-style: italic; padding: 14px 16px; background: #f8fafc; border-radius: 8px; border: 1px dashed #cbd5e1;">No follow-up history recorded yet.</div>';
+    }
 
-        gridRow.children('.remarks-display').remove();
-
-        const rowName = gridRow.attr('data-name');
-        if (!rowName) return;
-
-        const doc = (frm.doc.followup_history || []).find(
-            row => row.name === rowName
-        );
-
-        if (!doc || !doc.remarks) return;
-
-        $('<div class="remarks-display"></div>')
-            .text('Remarks: ' + doc.remarks)
-            .insertAfter(gridRow.children('.data-row'));
+    // Sort newest first to easily view recent activities
+    list.sort((a, b) => {
+        const dtA = a.updated_on || a.creation || '';
+        const dtB = b.updated_on || b.creation || '';
+        if (dtA && dtB) {
+            return dtB.localeCompare(dtA);
+        }
+        return 0;
     });
+
+    let html = ['<div class="activity-timeline" style="margin-top: 15px; margin-left: 12px; margin-bottom: 20px; border-left: 2px solid #e2e8f0; padding-left: 24px; position: relative;">'];
+
+    list.forEach(row => {
+        const user = esc(row.updated_by || 'System');
+        const dtStr = row.updated_on ? esc(format_followup_dt(row.updated_on)) : '';
+        const statusBadge = get_status_badge(row.status);
+        const callTypeBadge = row.call_type
+            ? `<span style="background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500;">🏷️ ${esc(row.call_type)}</span>`
+            : '';
+        const subStatusBadge = (row.sub_status || row.sub_sub_status)
+            ? `<span style="background: #f8fafc; color: #475569; border: 1px solid #e2e8f0; padding: 2px 8px; border-radius: 4px; font-size: 11px;">📂 ${esc(row.sub_status || '')}${row.sub_sub_status ? ' › ' + esc(row.sub_sub_status) : ''}</span>`
+            : '';
+        const nextFollowupBadge = row.followup_date
+            ? `<span style="background: #fffbeb; color: #92400e; border: 1px solid #fef3c7; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">📅 Next Followup: ${esc(frappe.datetime.str_to_user(row.followup_date))}${row.followup_time ? ' at ' + esc(row.followup_time.substring(0, 5)) : ''}</span>`
+            : '';
+
+        let actionBadge = '';
+        if (row.remarks && row.remarks.includes('Call transferred')) {
+            actionBadge = `<span style="background: #fdf2f8; color: #9d174d; border: 1px solid #fbcfe8; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">🔄 TRANSFERRED</span>`;
+        } else if (row.remarks && row.remarks.includes('Call taken over')) {
+            actionBadge = `<span style="background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">👤 TAKEN OVER</span>`;
+        }
+
+        html.push(`
+            <div class="timeline-item" style="margin-bottom: 16px; position: relative;">
+                <div style="position: absolute; left: -35px; top: 2px; background: #ffffff; padding: 2px;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6c757d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                </div>
+                <div style="font-size: 12.5px; color: #505a62; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+                    <div>
+                        <b style="color: #1c2126; font-weight: 600;">${user}</b>
+                        ${dtStr ? `<span style="color: #8d99a6; margin-left: 6px;">updated • ${dtStr}</span>` : ''}
+                    </div>
+                    <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                        ${statusBadge}
+                        ${actionBadge}
+                        ${callTypeBadge}
+                        ${subStatusBadge}
+                        ${nextFollowupBadge}
+                    </div>
+                </div>
+                <div style="background: #fcfcfc; border: 1px solid #d1d8dd; border-radius: 5px; padding: 3px 8px; font-size: 12px; color: #1c2126; white-space: pre-wrap; line-height: 1.25; box-shadow: 0 1px 2px rgba(0,0,0,0.02); width: 100%; box-sizing: border-box;">
+                    ${esc(row.remarks || '-')}
+                </div>
+            </div>
+        `);
+    });
+
+    html.push('</div>');
+    return html.join('');
+}
+
+function render_followup_timeline(frm) {
+    if (!frm.fields_dict.followup_history_html) return;
+    if (frm.is_new() && (!frm.doc.followup_history || !frm.doc.followup_history.length)) {
+        frm.fields_dict.followup_history_html.$wrapper.html(
+            '<div style="color: #94a3b8; font-style: italic; padding: 12px 14px; background: #f8fafc; border-radius: 8px; border: 1px dashed #cbd5e1;">Follow-up timeline will be recorded once the ticket is saved.</div>'
+        );
+        return;
+    }
+    const html = build_followup_timeline_html(frm.doc.followup_history || []);
+    frm.fields_dict.followup_history_html.$wrapper.html(html);
 }
 
 
@@ -861,17 +1579,39 @@ function load_call_history(frm) {
             const esc = value =>
                 frappe.utils.escape_html(String(value || ''));
 
+            function get_status_pill(status) {
+                const s = String(status || '').toUpperCase();
+                let color = 'gray';
+                if (s === 'COMPLETED') color = 'green';
+                else if (s === 'FOLLOWUP') color = 'orange';
+                else if (s === 'NEW') color = 'blue';
+                else if (s === 'PENDING') color = 'red';
+                return `<span class="indicator-pill ${color}" style="font-size: 11px;">${esc(status)}</span>`;
+            }
+
+            function format_datetime_str(dt) {
+                if (!dt) return '';
+                try {
+                    const d = frappe.datetime.str_to_user(dt);
+                    const timePart = dt.indexOf(' ') > -1 ? dt.split(' ')[1].substring(0, 5) : '';
+                    return timePart ? `${d} ${timePart}` : d;
+                } catch (e) {
+                    return dt;
+                }
+            }
+
             let html = `
                 <div style="overflow-x:auto">
-                    <table class="table table-bordered table-hover">
+                    <table class="table table-bordered table-hover" style="font-size: 13px;">
                         <thead>
-                            <tr>
+                            <tr style="background: var(--bg-light-gray, #f8f9fa);">
                                 <th>Ticket No</th>
                                 <th>Call Source</th>
                                 <th>Call Type</th>
+                                <th>Executive</th>
                                 <th>Status</th>
                                 <th>Creation Date</th>
-                                <th>View Details</th>
+                                <th style="text-align: center;">View Details</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -879,19 +1619,21 @@ function load_call_history(frm) {
 
             rows.forEach(row => {
                 const ticketName = esc(row.name);
+                const ticketUrl = `/app/support_ticket/${encodeURIComponent(row.name)}`;
 
                 html += `
                     <tr>
-                        <td>${ticketName}</td>
-                        <td>${esc(row.call_source)}</td>
-                        <td>${esc(row.call_type)}</td>
-                        <td>${esc(row.status)}</td>
-                        <td>${esc(
-                            row.creation
-                                ? frappe.datetime.str_to_user(row.creation)
-                                : ''
-                        )}</td>
                         <td>
+                            <a href="${ticketUrl}" target="_blank" style="font-weight: 600; text-decoration: underline;">
+                                ${ticketName}
+                            </a>
+                        </td>
+                        <td>${esc(row.call_source || '-')}</td>
+                        <td>${esc(row.call_type || '-')}</td>
+                        <td>${esc(row.executive || '-')}</td>
+                        <td>${get_status_pill(row.status)}</td>
+                        <td>${esc(format_datetime_str(row.creation))}</td>
+                        <td style="text-align: center;">
                             <button
                                 type="button"
                                 class="btn btn-xs btn-default view-ticket-details"
@@ -951,70 +1693,32 @@ function show_ticket_followup_history(ticketName) {
 
             const history = ticket.followup_history || [];
 
-            let html = `
-                <p>
-                    <b>Ticket No:</b> ${esc(ticket.name)}
-                    &nbsp;&nbsp;
-                    <b>Create Date Time:</b> ${esc(frappe.datetime.str_to_user(ticket.creation))}
-                    &nbsp;&nbsp;
-                    <b>Current Status:</b> ${esc(ticket.status)}
-                </p>
-                <div style="overflow-x:auto">
-                    <table class="table table-bordered table-hover">
-                        <thead>
-                            <tr>
-                                <th>Call Type</th>
-                                <th>Status</th>
-                                <th>Sub Status</th>
-                                <th>Sub Sub Status</th>
-                                <th>Updated By</th>
-                                <th>Updated On</th>
-                                <th>Followup Date</th>
-                                <th>Followup Time</th>
-
-                            </tr>
-                        </thead>
-                        <tbody>
-            `;
-
-            if (!history.length) {
-                html += `
-                    <tr>
-                        <td colspan="8" class="text-muted">
-                            No follow-up history found.
-                        </td>
-                    </tr>
-                `;
+            function format_datetime_str(dt) {
+                if (!dt) return '';
+                try {
+                    const d = frappe.datetime.str_to_user(dt);
+                    const timePart = dt.indexOf(' ') > -1 ? dt.split(' ')[1].substring(0, 5) : '';
+                    return timePart ? `${d} ${timePart}` : d;
+                } catch (e) {
+                    return dt;
+                }
             }
 
-            history.forEach(row => {
-                html += `
-                    <tr>
-                        <td>${esc(row.call_type)}</td>
-                        <td>${esc(row.status)}</td>
-                        <td>${esc(row.sub_status)}</td>
-                        <td>${esc(row.sub_sub_status)}</td>
-                        <td>${esc(row.updated_by)}</td>
-                        <td>${row.updated_on ? esc(frappe.datetime.str_to_user(row.updated_on)) : ''}</td>
-                        <td>${esc(row.followup_date)}</td>
-                        <td>${esc(row.followup_time)}</td>
-                    </tr>
-
-                    <tr class="remarks-row">
-                        <td colspan="8" style="text-align:left !important; padding:2px 8px !important;">
-                            <div style="text-align:left !important; float:none !important;">
-                                <b>Remarks:</b> ${esc(row.remarks)}
-                            </div>
-                        </td>
-                    </tr>
-               
-                `;
-            });
-
-            html += `
-                        </tbody>
-                    </table>
+            let html = `
+                <div style="background: var(--bg-light-gray, #f8f9fa); padding: 10px 14px; border-radius: 6px; margin-bottom: 14px; font-size: 13px; border: 1px solid var(--border-color, #e2e8f0);">
+                    <div class="row">
+                        <div class="col-sm-4"><b>Ticket No:</b> ${esc(ticket.name)}</div>
+                        <div class="col-sm-4"><b>Company:</b> ${esc(ticket.party_name || '-')}</div>
+                        <div class="col-sm-4"><b>Status:</b> ${esc(ticket.status || '-')}</div>
+                    </div>
+                    <div class="row" style="margin-top: 6px;">
+                        <div class="col-sm-4"><b>Contact:</b> ${esc(ticket.contact_name || '-')} (${esc(ticket.contact_phone || '-')})</div>
+                        <div class="col-sm-4"><b>Executive:</b> ${esc(ticket.executive || '-')}</div>
+                        <div class="col-sm-4"><b>Created:</b> ${esc(format_datetime_str(ticket.creation))}</div>
+                    </div>
+                    ${ticket.remarks ? `<div style="margin-top: 8px; padding-top: 6px; border-top: 1px dashed var(--border-color, #cbd5e1);"><b>Initial Remarks:</b> ${esc(ticket.remarks)}</div>` : ''}
                 </div>
+                ${build_followup_timeline_html(history)}
             `;
 
             const dialog = new frappe.ui.Dialog({
@@ -1042,4 +1746,118 @@ function show_ticket_followup_history(ticketName) {
             );
         }
     });
+}
+
+// ==========================================================
+// LIVE TICKET TIMER (FROM STATUS NEW TO COMPLETED)
+// ==========================================================
+function setup_live_ticket_timer(frm) {
+    if (window.support_ticket_form_timer) {
+        clearInterval(window.support_ticket_form_timer);
+        window.support_ticket_form_timer = null;
+    }
+
+    // Do NOT run timer for new unsaved tickets - timer starts only after ticket is created/saved
+    if (frm.is_new() || !frm.doc.creation) {
+        if (frm.fields_dict.pending_time && frm.fields_dict.pending_time.$wrapper) {
+            frm.fields_dict.pending_time.$wrapper.find('input').val('');
+        }
+        return;
+    }
+
+    if (frm.doc.status === 'COMPLETED') {
+        const completedText = frm.doc.total_time_taken || frm.doc.pending_time || 'Completed';
+        frm.page.set_indicator(__('Completed ({0})', [completedText]), 'green');
+        if (frm.fields_dict.pending_time && frm.fields_dict.pending_time.$wrapper) {
+            frm.fields_dict.pending_time.$wrapper.find('input').val(completedText);
+        }
+        return;
+    }
+
+    const createdTime = new Date(frm.doc.creation).getTime();
+
+    function tick() {
+        if (!frm.doc || frm.doc.status === 'COMPLETED') {
+            if (window.support_ticket_form_timer) {
+                clearInterval(window.support_ticket_form_timer);
+                window.support_ticket_form_timer = null;
+            }
+            return;
+        }
+
+        const elapsedSec = Math.max(0, Math.floor((Date.now() - createdTime) / 1000));
+        const days = Math.floor(elapsedSec / 86400);
+        const hours = Math.floor((elapsedSec % 86400) / 3600);
+        const mins = Math.floor((elapsedSec % 3600) / 60);
+        const secs = elapsedSec % 60;
+
+        let displayParts = [];
+        if (days) displayParts.push(`${days}d`);
+        if (hours || days) displayParts.push(`${hours}h`);
+        displayParts.push(`${mins}m`);
+        displayParts.push(`${secs}s`);
+        const timerStr = displayParts.join(' ');
+
+        // Update form indicator badge
+        const indicatorColor = (elapsedSec > 7200) ? 'red' : ((elapsedSec > 3600) ? 'orange' : 'blue');
+        frm.page.set_indicator(__('Pending: {0}', [timerStr]), indicatorColor);
+
+        // Update pending_time field input without marking form dirty
+        if (frm.fields_dict.pending_time && frm.fields_dict.pending_time.$wrapper) {
+            frm.fields_dict.pending_time.$wrapper.find('input').val(timerStr);
+        }
+    }
+
+    tick();
+    window.support_ticket_form_timer = setInterval(tick, 1000);
+}
+
+
+// ============================================================
+// HBS TALLY RENEWAL AUTOFILL & NOTIFICATION
+// ============================================================
+function fetch_tally_renewal_details(frm, show_alert_if_not_found) {
+    const serial = (frm.doc.serial_no || '').trim();
+    if (!serial) {
+        clear_renewal_fields(frm);
+        return;
+    }
+
+    frappe.call({
+        method: 'hbs_ticket_system.hbs_support_system.doctype.support_ticket.support_ticket.get_tally_renewal_details',
+        args: { serial_no: serial },
+        callback: (r) => {
+            const data = r.message;
+            if (data) {
+                frm.set_value('renewal_party_name', data.party_name || '');
+                frm.set_value('renewal_license_type', data.license_type || '');
+                frm.set_value('renewal_tally_version', data.tally_version || '');
+                frm.set_value('renewal_tss_expiry_date', data.tss_expiry_date || '');
+                frm.set_value('renewal_partner_name', data.partner_name || '');
+                frm.set_value('renewal_tss_status', data.tss_status || '');
+                frm.set_value('renewal_mobile', data.mobile || '');
+                frm.set_value('renewal_email', data.email || '');
+            } else {
+                clear_renewal_fields(frm);
+                if (show_alert_if_not_found) {
+                    frappe.msgprint({
+                        title: __('Renewal Notice'),
+                        indicator: 'orange',
+                        message: __('This party is not in our database.')
+                    });
+                }
+            }
+        }
+    });
+}
+
+function clear_renewal_fields(frm) {
+    frm.set_value('renewal_party_name', '');
+    frm.set_value('renewal_license_type', '');
+    frm.set_value('renewal_tally_version', '');
+    frm.set_value('renewal_tss_expiry_date', '');
+    frm.set_value('renewal_partner_name', '');
+    frm.set_value('renewal_tss_status', '');
+    frm.set_value('renewal_mobile', '');
+    frm.set_value('renewal_email', '');
 }
