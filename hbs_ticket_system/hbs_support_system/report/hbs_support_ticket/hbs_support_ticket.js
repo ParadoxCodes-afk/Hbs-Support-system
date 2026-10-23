@@ -81,7 +81,28 @@ frappe.query_reports["hbs_support_ticket"] = {
         }
     },
 
+    get_datatable_options: function(options) {
+        return Object.assign(options, {
+            layout: "fluid"
+        });
+    },
+
+    after_datatable_render: function(datatable) {
+        if (!datatable || !datatable.wrapper) return;
+        $(datatable.wrapper).find(".dt-scrollable").css({
+            "min-height": "140px",
+            "overflow-x": "auto"
+        });
+    },
+
     onload: function(report) {
+        frappe.dom.set_style(`
+            .report-wrapper .dt-scrollable,
+            .datatable .dt-scrollable {
+                min-height: 140px !important;
+            }
+        `);
+
         // Event delegation for drilldown button in datatable
         if (report && report.page && report.page.wrapper) {
             report.page.wrapper.off("click", ".btn-drilldown-ticket").on("click", ".btn-drilldown-ticket", function(e) {
