@@ -376,6 +376,8 @@ class support_ticket(Document):
 
         if frappe.db.exists("DocType", "Hbs CRM Email Settings") and frappe.db.exists("Hbs CRM Email Settings"):
             crm_settings = frappe.get_doc("Hbs CRM Email Settings", ignore_permissions=True)
+            if not getattr(crm_settings, "enable_auto_ticket_email", 1):
+                return
             if crm_settings.email_id:
                 email_addr = crm_settings.email_id
             if crm_settings.sender_name:
