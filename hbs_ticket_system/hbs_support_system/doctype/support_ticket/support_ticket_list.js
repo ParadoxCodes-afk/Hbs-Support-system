@@ -1,6 +1,7 @@
 frappe.listview_settings['support_ticket'] = {
 
     add_fields: [
+        'unique_id',
         'amc_status',
         'amc_expiry_date',
         'amc_executive',

@@ -588,6 +588,7 @@ frappe.ui.form.on('support_ticket', {
         load_call_history(frm);
 
         if (!frm.doc.serial_no) {
+            frm.set_value('unique_id', '');
             frm.set_value('party_name', '');
             frm.set_value('email', '');
             frm.set_value('amc_status', '');
@@ -599,24 +600,32 @@ frappe.ui.form.on('support_ticket', {
             frm.set_value('contact_phone', '');
             highlight_amc_fields(frm);
             clear_renewal_fields(frm);
+            load_call_history(frm);
         } else {
             const serial = String(frm.doc.serial_no).trim();
             if (serial.length === 9) {
-                frappe.db.get_value('support_ticket_ledger', serial, ['party_name', 'email', 'amc_status', 'amc_expiry_date', 'executive', 'executive2'], (r) => {
-                    if (r && r.party_name) {
-                        frm.set_value('party_name', r.party_name);
-                        frm.set_value('email', r.email || '');
-                        frm.set_value('amc_status', r.amc_status || 'NO');
-                        frm.set_value('amc_expiry_date', r.amc_expiry_date || '');
-                        frm.set_value('priority', r.amc_status === 'YES' ? 'P1' : 'P2');
-                        if (r.amc_status === 'YES') {
-                            frm.set_value('amc_executive', r.executive || '');
-                            frm.set_value('amc_executive2', r.executive2 || '');
-                        } else {
-                            frm.set_value('amc_executive', '');
-                            frm.set_value('amc_executive2', '');
+                frappe.call({
+                    method: 'hbs_ticket_system.hbs_support_system.doctype.support_ticket.support_ticket.get_ledger_for_serial',
+                    args: { serial_no: serial },
+                    callback: function(r) {
+                        const res = r.message;
+                        if (res && (res.party_name || res.unique_id)) {
+                            frm.set_value('unique_id', res.unique_id || '');
+                            frm.set_value('party_name', res.party_name || '');
+                            frm.set_value('email', res.email || '');
+                            frm.set_value('amc_status', res.amc_status || 'NO');
+                            frm.set_value('amc_expiry_date', res.amc_expiry_date || '');
+                            frm.set_value('priority', res.amc_status === 'YES' ? 'P1' : 'P2');
+                            if (res.amc_status === 'YES') {
+                                frm.set_value('amc_executive', res.amc_executive || '');
+                                frm.set_value('amc_executive2', res.amc_executive2 || '');
+                            } else {
+                                frm.set_value('amc_executive', '');
+                                frm.set_value('amc_executive2', '');
+                            }
+                            highlight_amc_fields(frm);
+                            load_call_history(frm);
                         }
-                        highlight_amc_fields(frm);
                     }
                 });
             }
@@ -1085,12 +1094,13 @@ function open_autofill_dialog(frm) {
                 <table class="table table-bordered table-hover" style="font-size: 13px; margin-bottom: 0;">
                     <thead style="position: sticky; top: 0; background: var(--bg-light-gray, #f8f9fa); z-index: 1;">
                         <tr>
-                            <th style="width: 15%;">Serial No</th>
-                            <th style="width: 25%;">Company Name</th>
-                            <th style="width: 20%;">Contact Person</th>
-                            <th style="width: 18%;">Phone</th>
-                            <th style="width: 12%;">AMC</th>
-                            <th style="width: 10%; text-align: center;">Action</th>
+                            <th style="width: 14%;">Serial No</th>
+                            <th style="width: 14%;">Customer ID</th>
+                            <th style="width: 24%;">Company Name</th>
+                            <th style="width: 18%;">Contact Person</th>
+                            <th style="width: 14%;">Phone</th>
+                            <th style="width: 8%;">AMC</th>
+                            <th style="width: 8%; text-align: center;">Action</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1112,6 +1122,7 @@ function open_autofill_dialog(frm) {
             html += `
                 <tr>
                     <td><b>${esc(row.serial_no)}</b></td>
+                    <td><span style="font-family: monospace; font-size: 11.5px; color: #475569;">${esc(row.unique_id || '-')}</span></td>
                     <td>${esc(row.party_name)}</td>
                     <td>${contactDisplay}</td>
                     <td>${phoneDisplay}</td>
@@ -1139,6 +1150,7 @@ function open_autofill_dialog(frm) {
             if (!row) return;
 
             await frm.set_value('serial_no', row.serial_no);
+            await frm.set_value('unique_id', row.unique_id || '');
             await frm.set_value('party_name', row.party_name || '');
             await frm.set_value('email', row.email || '');
             await frm.set_value('amc_status', row.amc_status || 'NO');
@@ -1586,7 +1598,8 @@ function load_call_history(frm) {
     frappe.call({
         method: 'hbs_ticket_system.hbs_support_system.doctype.support_ticket.support_ticket.get_call_history',
         args: {
-            serial_no: frm.doc.serial_no,
+            serial_no: frm.doc.serial_no || '',
+            unique_id: frm.doc.unique_id || '',
             current_ticket: frm.doc.name || ''
         },
         callback: function (r) {
@@ -1638,6 +1651,7 @@ function load_call_history(frm) {
                         <thead>
                             <tr style="background: var(--bg-light-gray, #f8f9fa);">
                                 <th>Ticket No</th>
+                                <th>Serial No</th>
                                 <th>Call Source</th>
                                 <th>Call Type</th>
                                 <th>Executive</th>
@@ -1660,6 +1674,7 @@ function load_call_history(frm) {
                                 ${ticketName}
                             </a>
                         </td>
+                        <td><b>${esc(row.serial_no || '-')}</b></td>
                         <td>${esc(row.call_source || '-')}</td>
                         <td>${esc(row.call_type || '-')}</td>
                         <td>${esc(row.executive || '-')}</td>

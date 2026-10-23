@@ -1,16 +1,19 @@
 {
  "actions": [],
  "allow_bulk_edit": 1,
- "autoname": "field:serial_no",
+ "autoname": "CUST-.#####",
  "creation": "2026-09-25 13:18:42.916885",
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
   "support_ticket_party_ledger_section",
+  "unique_id",
   "serial_no",
   "party_name",
   "email",
   "our_company_name",
+  "serial_numbers_section",
+  "serial_numbers",
   "contact_details_section",
   "contact_details",
   "address_tab",
@@ -37,13 +40,23 @@
    "label": "Support Ticket Party Ledger"
   },
   {
+   "fieldname": "unique_id",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Customer Unique ID",
+   "read_only": 1
+  },
+  {
    "fieldname": "serial_no",
    "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Serial No",
    "length": 9,
-   "reqd": 1,
-   "unique": 1
+   "reqd": 0,
+   "unique": 0,
+   "read_only": 1,
+   "hidden": 1
   },
   {
    "fieldname": "party_name",
@@ -137,6 +150,17 @@
    "options": "HBS Solutions Pvt Ltd\nNewAge InfoCom Pvt Ltd\nHBS Services"
   },
   {
+   "fieldname": "serial_numbers_section",
+   "fieldtype": "Section Break",
+   "label": "Serial Numbers"
+  },
+  {
+   "fieldname": "serial_numbers",
+   "fieldtype": "Table",
+   "label": "Serial Numbers",
+   "options": "support_ticket_ledger_serials"
+  },
+  {
    "fieldname": "address_tab",
    "fieldtype": "Tab Break",
    "label": "Address"
@@ -176,7 +200,6 @@
  "modified_by": "Administrator",
  "module": "HBS Support System",
  "name": "support_ticket_ledger",
- "naming_rule": "By fieldname",
  "owner": "Administrator",
  "permissions": [
   {
@@ -218,5 +241,5 @@
  "sort_field": "creation",
  "sort_order": "DESC",
  "states": [],
- "title_field": "serial_no"
+ "title_field": "party_name"
 }

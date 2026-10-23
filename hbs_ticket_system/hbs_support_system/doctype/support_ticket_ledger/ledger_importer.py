@@ -1,3 +1,4 @@
+import re
 # Copyright (c) 2026, HBS and contributors
 # For license information, please see license.txt
 
@@ -223,20 +224,25 @@ def process_import_batch(batch_token, start_idx=0, batch_size=50):
 
     for idx, row in enumerate(chunk, start=start_idx + 1):
         try:
-            # 1. Serial No
+            # 1. Serial No (supports multiple comma-separated serials)
             raw_serial = row.get("Serial No") or row.get("Serial_No") or row.get("serial_no") or ""
-            serial_no = str(raw_serial).strip()
-            if serial_no.endswith(".0"):
-                serial_no = serial_no[:-2]
+            serial_candidates = [s.strip() for s in re.split(r"[,;/]+", str(raw_serial)) if s.strip()]
+            valid_serials = []
+            for s in serial_candidates:
+                if s.endswith(".0"):
+                    s = s[:-2]
+                if s.isdigit() and len(s) == 9:
+                    valid_serials.append(s)
 
-            if not serial_no or len(serial_no) != 9 or not serial_no.isdigit():
+            if not valid_serials:
                 errors.append({
                     "row": idx,
-                    "serial_no": serial_no or "Empty",
+                    "serial_no": str(raw_serial) or "Empty",
                     "party_name": str(row.get("Party Name") or "-"),
-                    "reason": f"Invalid Serial No '{serial_no}'. Must contain exactly 9 digits."
+                    "reason": f"Invalid Serial No '{raw_serial}'. Must contain at least one valid 9-digit serial number."
                 })
                 continue
+            serial_no = valid_serials[0]
 
             # 2. Party Name
             party_name = str(row.get("Party Name") or "").strip()
@@ -317,10 +323,20 @@ def process_import_batch(batch_token, start_idx=0, batch_size=50):
                         "contact_phone": phone
                     })
 
-            # Check if ledger exists
-            is_existing = frappe.db.exists("support_ticket_ledger", serial_no)
-            if is_existing:
-                doc = frappe.get_doc("support_ticket_ledger", serial_no)
+            # Match existing customer by any of the serial numbers
+            matched_parent = None
+            for s in valid_serials:
+                p = frappe.db.get_value("support_ticket_ledger_serials", {"serial_no": s}, "parent")
+                if not p:
+                    p = frappe.db.get_value("support_ticket_ledger", s, "name")
+                if not p:
+                    p = frappe.db.get_value("support_ticket_ledger", {"serial_no": s}, "name")
+                if p:
+                    matched_parent = p
+                    break
+
+            if matched_parent and frappe.db.exists("support_ticket_ledger", matched_parent):
+                doc = frappe.get_doc("support_ticket_ledger", matched_parent)
                 doc.party_name = party_name
                 if email:
                     doc.email = email
@@ -341,25 +357,33 @@ def process_import_batch(batch_token, start_idx=0, batch_size=50):
                 if exec2:
                     doc.executive2 = exec2
 
+                # Sync all valid serial numbers into child table
+                existing_serials = {s_row.serial_no for s_row in (doc.get("serial_numbers") or []) if s_row.serial_no}
+                for s in valid_serials:
+                    if s not in existing_serials:
+                        doc.append("serial_numbers", {"serial_no": s})
+                        existing_serials.add(s)
+
                 # Update / Append contact details
                 if contacts:
-                    existing_phones = {c.contact_phone for c in doc.contact_details if c.contact_phone}
+                    existing_phones = {c.contact_phone for c in (doc.get("contact_details") or []) if c.contact_phone}
                     for new_c in contacts:
                         if new_c["contact_phone"] not in existing_phones:
                             doc.append("contact_details", new_c)
                             existing_phones.add(new_c["contact_phone"])
                         else:
-                            for ex_c in doc.contact_details:
+                            for ex_c in (doc.get("contact_details") or []):
                                 if ex_c.contact_phone == new_c["contact_phone"] and new_c["contact_name"]:
                                     ex_c.contact_name = new_c["contact_name"]
 
                 doc.save(ignore_permissions=True)
                 updated_count += 1
             else:
+                serial_rows = [{"serial_no": s} for s in valid_serials]
                 doc_dict = {
                     "doctype": "support_ticket_ledger",
-                    "serial_no": serial_no,
                     "party_name": party_name,
+                    "serial_no": valid_serials[0],
                     "email": email or None,
                     "our_company_name": our_company_name,
                     "address": address or None,
@@ -371,6 +395,7 @@ def process_import_batch(batch_token, start_idx=0, batch_size=50):
                     "visits": visits,
                     "executive": exec1,
                     "executive2": exec2,
+                    "serial_numbers": serial_rows,
                     "contact_details": contacts
                 }
                 new_doc = frappe.get_doc(doc_dict)

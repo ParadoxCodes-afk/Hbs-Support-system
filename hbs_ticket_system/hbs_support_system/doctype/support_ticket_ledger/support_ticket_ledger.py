@@ -8,19 +8,45 @@ from frappe.model.document import Document
 
 class support_ticket_ledger(Document):
 
+    def before_insert(self):
+        if not self.unique_id and self.name:
+            self.unique_id = self.name
+
     def validate(self):
         self.check_alter_permission()
+
+        if not self.unique_id and self.name:
+            self.unique_id = self.name
 
         if self.amc_status == "YES" and self.amc_start_date and self.amc_period and not self.amc_expiry_date:
             self.amc_expiry_date = self.get_calculated_amc_expiry()
 
-        if not self.serial_no:
-            return
+        # Validate and sync child serial numbers
+        seen_serials = set()
+        cleaned_serials = []
+        for row in self.get("serial_numbers") or []:
+            s = str(row.serial_no or "").strip()
+            if s.endswith(".0"):
+                s = s[:-2]
+            row.serial_no = s
+            if not s:
+                continue
+            if not s.isdigit() or len(s) != 9:
+                frappe.throw(_(f"Serial No '{s}' must contain exactly 9 digits."))
+            if s in seen_serials:
+                frappe.throw(_(f"Duplicate Serial No '{s}' entered in this customer record."))
+            seen_serials.add(s)
+            cleaned_serials.append(s)
 
-        serial_no = str(self.serial_no).strip()
-
-        if not serial_no.isdigit() or len(serial_no) != 9:
-            frappe.throw(_("Serial No must contain exactly 9 digits."))
+        # Sync header serial_no for backward compatibility
+        if cleaned_serials and not self.serial_no:
+            self.serial_no = cleaned_serials[0]
+        elif self.serial_no and not cleaned_serials:
+            s_hdr = str(self.serial_no).strip()
+            if s_hdr.endswith(".0"):
+                s_hdr = s_hdr[:-2]
+            if s_hdr.isdigit() and len(s_hdr) == 9:
+                self.append("serial_numbers", {"serial_no": s_hdr})
 
     def get_calculated_amc_expiry(self):
         if not self.amc_start_date or not self.amc_period:

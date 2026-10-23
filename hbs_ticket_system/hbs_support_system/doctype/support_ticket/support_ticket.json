@@ -8,6 +8,7 @@
  "field_order": [
   "party_details_section",
   "serial_no",
+  "unique_id",
   "party_name",
   "email",
   "list_sort_order",
@@ -69,6 +70,14 @@
    "label": "Serial No",
    "length": 9,
    "reqd": 1
+  },
+  {
+   "fieldname": "unique_id",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Customer Unique ID",
+   "read_only": 1
   },
   {
    "fieldname": "party_name",

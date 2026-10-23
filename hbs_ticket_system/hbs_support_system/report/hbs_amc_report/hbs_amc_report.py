@@ -13,11 +13,17 @@ def execute(filters=None):
 def get_columns():
     return [
         {
-            "label": _("Serial No"),
-            "fieldname": "serial_no",
+            "label": _("Customer ID"),
+            "fieldname": "unique_id",
             "fieldtype": "Link",
             "options": "support_ticket_ledger",
-            "width": 115,
+            "width": 110,
+        },
+        {
+            "label": _("Serial No(s)"),
+            "fieldname": "serial_no",
+            "fieldtype": "Data",
+            "width": 140,
         },
         {
             "label": _("Party Name"),
@@ -108,7 +114,8 @@ def get_data(filters):
 
     sql = f"""
         SELECT 
-            l.name as serial_no,
+            l.name as unique_id,
+            COALESCE(GROUP_CONCAT(DISTINCT s.serial_no ORDER BY s.idx SEPARATOR ', '), l.serial_no, l.name) as serial_no,
             l.party_name,
             l.amc_status,
             l.amc_start_date,
@@ -118,7 +125,9 @@ def get_data(filters):
             l.executive2,
             l.email
         FROM `tabsupport_ticket_ledger` l
+        LEFT JOIN `tabsupport_ticket_ledger_serials` s ON s.parent = l.name
         WHERE {where_clause}
+        GROUP BY l.name
         ORDER BY l.amc_expiry_date ASC, l.party_name ASC
     """
 

@@ -49,6 +49,40 @@ def format_duration(seconds):
     return " ".join(parts)
 
 
+@frappe.whitelist()
+def get_ledger_for_serial(serial_no):
+    """Lookup parent ledger info for a given 9-digit serial number."""
+    serial_no = str(serial_no or "").strip()
+    if serial_no.endswith(".0"):
+        serial_no = serial_no[:-2]
+    if not serial_no:
+        return None
+
+    parent = frappe.db.get_value("support_ticket_ledger_serials", {"serial_no": serial_no}, "parent")
+    if not parent:
+        parent = frappe.db.get_value("support_ticket_ledger", serial_no, "name")
+    if not parent:
+        parent = frappe.db.get_value("support_ticket_ledger", {"serial_no": serial_no}, "name")
+    if not parent:
+        return None
+
+    ledger = frappe.db.get_value(
+        "support_ticket_ledger",
+        parent,
+        [
+            "name as unique_id",
+            "party_name",
+            "email",
+            "amc_status",
+            "amc_expiry_date",
+            "executive as amc_executive",
+            "executive2 as amc_executive2"
+        ],
+        as_dict=True
+    )
+    return ledger
+
+
 class support_ticket(Document):
 
     def validate(self):
@@ -123,22 +157,25 @@ class support_ticket(Document):
 
     def sync_amc_details(self):
         if not getattr(self, "serial_no", None):
+            self.unique_id = None
             self.amc_executive = None
             self.amc_executive2 = None
             return
 
-        ledger = frappe.db.get_value(
-            "support_ticket_ledger",
-            self.serial_no,
-            ["amc_status", "amc_expiry_date", "executive", "executive2"],
-            as_dict=True
-        )
-        if ledger and ledger.amc_status == "YES":
-            self.amc_status = "YES"
-            if ledger.amc_expiry_date:
-                self.amc_expiry_date = ledger.amc_expiry_date
-            self.amc_executive = ledger.executive
-            self.amc_executive2 = ledger.executive2
+        ledger = get_ledger_for_serial(self.serial_no)
+        if ledger:
+            if ledger.get("unique_id"):
+                self.unique_id = ledger.unique_id
+            if ledger.get("amc_status") == "YES":
+                self.amc_status = "YES"
+                if ledger.get("amc_expiry_date"):
+                    self.amc_expiry_date = ledger.amc_expiry_date
+                self.amc_executive = ledger.get("amc_executive")
+                self.amc_executive2 = ledger.get("amc_executive2")
+            else:
+                self.amc_status = ledger.get("amc_status") or "NO"
+                self.amc_executive = None
+                self.amc_executive2 = None
         else:
             self.amc_executive = None
             self.amc_executive2 = None
@@ -230,17 +267,29 @@ class support_ticket(Document):
         if c_phone and not self.contact_phone:
             self.contact_phone = c_phone
 
-        if frappe.db.exists("support_ticket_ledger", serial_no):
-            ledger = frappe.get_doc("support_ticket_ledger", serial_no)
+        ledger_id = getattr(self, "unique_id", None)
+        if not ledger_id:
+            ledger_id = frappe.db.get_value("support_ticket_ledger_serials", {"serial_no": serial_no}, "parent")
+        if not ledger_id and frappe.db.exists("support_ticket_ledger", serial_no):
+            ledger_id = serial_no
+        if not ledger_id and getattr(self, "party_name", None):
+            ledger_id = frappe.db.get_value("support_ticket_ledger", {"party_name": self.party_name}, "name")
+
+        if ledger_id and frappe.db.exists("support_ticket_ledger", ledger_id):
+            ledger = frappe.get_doc("support_ticket_ledger", ledger_id)
             if self.party_name:
                 ledger.party_name = self.party_name
             if self.email:
                 ledger.email = self.email
 
+            # Ensure serial_no is in serial_numbers child table
+            existing_serials = {s.serial_no for s in (ledger.get("serial_numbers") or []) if s.serial_no}
+            if serial_no and serial_no not in existing_serials:
+                ledger.append("serial_numbers", {"serial_no": serial_no})
+
             if c_name or c_phone:
                 existing_contact = None
-                for contact in ledger.contact_details:
-                    # Match by name if provided, or by phone if name not provided
+                for contact in (ledger.get("contact_details") or []):
                     if c_name and (contact.contact_name or "").strip().lower() == c_name.lower():
                         existing_contact = contact
                         break
@@ -262,6 +311,8 @@ class support_ticket(Document):
                         }
                     )
             ledger.save(ignore_permissions=True)
+            if not self.unique_id:
+                self.unique_id = ledger.name
         else:
             contacts = []
             if c_name or c_phone:
@@ -272,14 +323,15 @@ class support_ticket(Document):
 
             ledger = frappe.get_doc({
                 "doctype": "support_ticket_ledger",
-                "serial_no": serial_no,
-                "party_name": self.party_name,
+                "party_name": self.party_name or serial_no,
                 "email": self.email,
                 "amc_status": self.amc_status or "NO",
                 "amc_expiry_date": self.amc_expiry_date,
+                "serial_numbers": [{"serial_no": serial_no}],
                 "contact_details": contacts
             })
             ledger.insert(ignore_permissions=True)
+            self.unique_id = ledger.name
 
 
 
@@ -372,7 +424,8 @@ def search_ledger_contacts(query=""):
 
     sql = """
         SELECT
-            l.name AS serial_no,
+            COALESCE(s.serial_no, l.serial_no, l.name) AS serial_no,
+            l.name AS unique_id,
             l.party_name,
             l.email,
             l.amc_status,
@@ -384,18 +437,23 @@ def search_ledger_contacts(query=""):
         FROM
             `tabsupport_ticket_ledger` l
         LEFT JOIN
+            `tabsupport_ticket_ledger_serials` s
+            ON s.parent = l.name
+        LEFT JOIN
             `tabsupport_ticket_ledger_contacts` c
             ON c.parent = l.name AND c.parentfield = 'contact_details'
         WHERE
-            l.name LIKE %s
+            s.serial_no LIKE %s
+            OR l.name LIKE %s
+            OR l.serial_no LIKE %s
             OR l.party_name LIKE %s
             OR c.contact_name LIKE %s
             OR c.contact_phone LIKE %s
         ORDER BY
-            l.name ASC, c.idx ASC
+            l.name ASC, s.idx ASC, c.idx ASC
         LIMIT 50
     """
-    return frappe.db.sql(sql, (like_q, like_q, like_q, like_q), as_dict=True)
+    return frappe.db.sql(sql, (like_q, like_q, like_q, like_q, like_q, like_q), as_dict=True)
 
 
 @frappe.whitelist()
@@ -404,7 +462,8 @@ def create_ledger_entry(serial_no, party_name, contact_name, contact_phone, emai
     if not is_genuine_tally_serial(serial_no):
         frappe.throw("Invalid Serial Number", title="Invalid Serial Number")
 
-    if frappe.db.exists("support_ticket_ledger", serial_no):
+    existing_parent = frappe.db.get_value("support_ticket_ledger_serials", {"serial_no": serial_no}, "parent")
+    if existing_parent or frappe.db.exists("support_ticket_ledger", serial_no):
         frappe.throw(f"Serial No {serial_no} already exists in the Ledger.")
 
     party_name = (party_name or "").strip()
@@ -425,11 +484,11 @@ def create_ledger_entry(serial_no, party_name, contact_name, contact_phone, emai
 
     ledger = frappe.get_doc({
         "doctype": "support_ticket_ledger",
-        "serial_no": serial_no,
         "party_name": party_name,
         "email": (email or "").strip(),
         "amc_status": amc_status or "NO",
         "amc_expiry_date": amc_expiry_date or None,
+        "serial_numbers": [{"serial_no": serial_no}],
         "contact_details": [
             {
                 "contact_name": contact_name,
@@ -440,7 +499,8 @@ def create_ledger_entry(serial_no, party_name, contact_name, contact_phone, emai
     ledger.insert(ignore_permissions=True)
 
     return {
-        "serial_no": ledger.serial_no,
+        "serial_no": serial_no,
+        "unique_id": ledger.name,
         "party_name": ledger.party_name,
         "email": ledger.email,
         "amc_status": ledger.amc_status,
@@ -525,33 +585,49 @@ def get_executive_workload():
     return result
 
 @frappe.whitelist()
-def get_call_history(serial_no, current_ticket=None):
+def get_call_history(serial_no=None, current_ticket=None, unique_id=None):
     serial_no = str(serial_no or "").strip()
-    if not serial_no:
+    unique_id = str(unique_id or "").strip()
+    current_ticket = str(current_ticket or "").strip()
+
+    if not serial_no and not unique_id:
         return []
 
-    filters = {"serial_no": serial_no}
+    conds = []
+    vals = {}
 
-    # Exclude the ticket currently open
-    current_ticket = str(current_ticket or "").strip()
+    if unique_id and serial_no:
+        conds.append("(unique_id = %(unique_id)s OR serial_no = %(serial_no)s)")
+        vals["unique_id"] = unique_id
+        vals["serial_no"] = serial_no
+    elif unique_id:
+        conds.append("unique_id = %(unique_id)s")
+        vals["unique_id"] = unique_id
+    else:
+        conds.append("serial_no = %(serial_no)s")
+        vals["serial_no"] = serial_no
+
     if current_ticket:
-        filters["name"] = ["!=", current_ticket]
+        conds.append("name != %(current_ticket)s")
+        vals["current_ticket"] = current_ticket
 
-    return frappe.get_all(
-        "support_ticket",
-        filters=filters,
-        fields=[
-            "name",
-            "call_source",
-            "call_type",
-            "executive",
-            "status",
-            "remarks",
-            "creation"
-        ],
-        order_by="creation desc",
-        limit_page_length=100
-    )
+    where_clause = " AND ".join(conds)
+
+    return frappe.db.sql(f"""
+        SELECT
+            name,
+            serial_no,
+            call_source,
+            call_type,
+            executive,
+            status,
+            remarks,
+            creation
+        FROM `tabsupport_ticket`
+        WHERE {where_clause}
+        ORDER BY creation DESC
+        LIMIT 100
+    """, vals, as_dict=True)
     
 
 def is_owner_or_admin(user=None):
