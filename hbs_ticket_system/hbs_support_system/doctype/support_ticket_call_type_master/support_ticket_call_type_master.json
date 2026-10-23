@@ -63,5 +63,6 @@
  "sort_field": "creation",
  "sort_order": "DESC",
  "states": [],
- "title_field": "call_type"
+ "title_field": "call_type",
+ "allow_rename": 1
 }

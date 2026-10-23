@@ -409,5 +409,6 @@
  "sort_field": "list_sort_order",
  "sort_order": "ASC",
  "states": [],
- "title_field": "party_name"
+ "title_field": "party_name",
+ "allow_rename": 1
 }
