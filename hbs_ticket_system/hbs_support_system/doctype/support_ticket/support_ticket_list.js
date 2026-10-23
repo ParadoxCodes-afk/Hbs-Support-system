@@ -60,24 +60,24 @@ frappe.listview_settings['support_ticket'] = {
             frappe.session.user === 'Administrator'
         );
 
+        const default_filters = [];
+
         if (allowed_statuses.length > 0) {
             // Ticket Creator (Chandni): Show all NEW tickets across ALL executives
-            listview.filter_area.add([
-                ['support_ticket', 'status', 'in', allowed_statuses]
-            ]);
+            default_filters.push(['support_ticket', 'status', 'in', allowed_statuses]);
         } else if (is_supervisor_or_owner) {
             // Supervisor (Komal) & Owners: Show ALL active tickets across entire team
-            listview.filter_area.add([
-                ['support_ticket', 'status', '!=', 'COMPLETED']
-            ]);
+            default_filters.push(['support_ticket', 'status', '!=', 'COMPLETED']);
         } else {
             // Regular Executive (Puneet): Default to their own assigned active tickets
-            // (Executive can clear the executive2 filter anytime in UI to view all tickets)
-            listview.filter_area.add([
-                ['support_ticket', 'status', '!=', 'COMPLETED'],
-                ['support_ticket', 'executive2', '=', frappe.session.user]
-            ]);
+            default_filters.push(['support_ticket', 'status', '!=', 'COMPLETED']);
+            default_filters.push(['support_ticket', 'executive2', '=', frappe.session.user]);
         }
+
+        // Follow up on or before filter (working exactly like in Hbs Crm Lead)
+        default_filters.push(['support_ticket', 'followup_date', '<=', frappe.datetime.get_today()]);
+
+        listview.filter_area.add(default_filters);
     },
 
     // ==========================================
@@ -93,19 +93,8 @@ frappe.listview_settings['support_ticket'] = {
         listview.get_args = function() {
             const args = original_get_args();
             args.order_by = 'list_sort_order asc, creation desc';
-
-            if (listview._followup_filter_date) {
-                if (!args.or_filters) {
-                    args.or_filters = [];
-                }
-                args.or_filters.push(['support_ticket', 'status', '!=', 'FOLLOWUP']);
-                args.or_filters.push(['support_ticket', 'followup_date', '<=', listview._followup_filter_date]);
-            }
             return args;
         };
-
-        // Followup date filter
-        setup_followup_date_filter(listview);
 
         // Pending time filter dropdown and custom hours input
         setup_pending_time_filter(listview);
@@ -132,7 +121,6 @@ frappe.listview_settings['support_ticket'] = {
     // ==========================================
 
     refresh(listview) {
-        setup_followup_date_filter(listview);
         setup_pending_time_filter(listview);
         setup_amc_pending_button(listview);
 
@@ -334,60 +322,6 @@ function setup_pending_time_filter(listview) {
         }
     });
 }
-
-
-// ==========================================================
-// FOLLOW-UP DATE FILTER TOOLBAR INPUT
-// ==========================================================
-function setup_followup_date_filter(listview) {
-    const $page = listview.page;
-    if (!$page || !$page.inner_toolbar) return;
-
-    if ($page.inner_toolbar.find('.followup-date-filter-wrapper').length) return;
-
-    const today = frappe.datetime.nowdate();
-    if (listview._followup_filter_date === undefined) {
-        listview._followup_filter_date = today;
-    }
-
-    const currentVal = listview._followup_filter_date || '';
-
-    const $wrapper = $(`
-        <div class="followup-date-filter-wrapper" style="display: inline-flex; align-items: center; margin-left: 8px; gap: 6px;">
-            <label style="margin: 0; font-size: 12px; font-weight: 600; color: #475569;">Followup Date:</label>
-            <input type="date" value="${currentVal}" class="form-control input-sm followup-date-input" style="width: 135px; height: 28px; font-size: 12px; padding: 2px 6px; cursor: pointer;" />
-            <button class="btn btn-default btn-xs btn-clear-followup-date" title="Clear/Reset Followup Date filter" style="height: 28px; padding: 2px 8px; font-size: 11px;">${currentVal ? 'All' : 'Today'}</button>
-        </div>
-    `);
-
-    $page.inner_toolbar.append($wrapper);
-
-    const $dateInput = $wrapper.find('.followup-date-input');
-    const $toggleBtn = $wrapper.find('.btn-clear-followup-date');
-
-    $dateInput.on('change', function () {
-        const val = $(this).val();
-        listview._followup_filter_date = val || null;
-        delete listview.last_args;
-        $toggleBtn.text(val ? 'All' : 'Today');
-        listview.refresh();
-    });
-
-    $toggleBtn.on('click', function () {
-        if (listview._followup_filter_date) {
-            listview._followup_filter_date = null;
-            $dateInput.val('');
-            $toggleBtn.text('Today');
-        } else {
-            listview._followup_filter_date = today;
-            $dateInput.val(today);
-            $toggleBtn.text('All');
-        }
-        delete listview.last_args;
-        listview.refresh();
-    });
-}
-
 
 
 (function () {

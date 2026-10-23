@@ -103,14 +103,17 @@ class support_ticket(Document):
         self.sync_renewal_details()
 
     def sync_followup_date(self):
-        if self.status == "FOLLOWUP":
+        if self.status in ("FOLLOWUP", "PENDING"):
             latest_date = None
             for row in reversed(self.get("followup_history") or []):
                 if row.followup_date:
                     latest_date = frappe.utils.getdate(row.followup_date)
                     break
-            self.followup_date = latest_date
-        elif self.status != "PENDING":
+            self.followup_date = latest_date or frappe.utils.getdate(self.creation or frappe.utils.nowdate())
+        elif self.status == "NEW":
+            if not self.followup_date:
+                self.followup_date = frappe.utils.getdate(self.creation or frappe.utils.nowdate())
+        else:
             self.followup_date = None
 
         

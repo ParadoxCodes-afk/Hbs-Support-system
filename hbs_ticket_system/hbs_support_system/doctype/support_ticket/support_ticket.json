@@ -216,8 +216,8 @@
    "fieldtype": "Date",
    "in_list_view": 1,
    "in_standard_filter": 1,
-   "label": "Followup Date",
-   "read_only": 1
+   "label": "Follow up Date",
+   "default": "Today"
   },
   {
    "fieldname": "followup_section",
