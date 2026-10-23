@@ -139,11 +139,6 @@ class support_ticket(Document):
                 self.amc_expiry_date = ledger.amc_expiry_date
             self.amc_executive = ledger.executive
             self.amc_executive2 = ledger.executive2
-            if self.is_new():
-                if ledger.executive:
-                    self.executive = ledger.executive
-                if ledger.executive2:
-                    self.executive2 = ledger.executive2
         else:
             self.amc_executive = None
             self.amc_executive2 = None

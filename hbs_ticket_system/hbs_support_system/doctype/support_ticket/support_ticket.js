@@ -612,10 +612,6 @@ frappe.ui.form.on('support_ticket', {
                         if (r.amc_status === 'YES') {
                             frm.set_value('amc_executive', r.executive || '');
                             frm.set_value('amc_executive2', r.executive2 || '');
-                            if (frm.is_new()) {
-                                if (r.executive) frm.set_value('executive', r.executive);
-                                if (r.executive2) frm.set_value('executive2', r.executive2);
-                            }
                         } else {
                             frm.set_value('amc_executive', '');
                             frm.set_value('amc_executive2', '');
@@ -1154,14 +1150,6 @@ function open_autofill_dialog(frm) {
             if (row.amc_status === 'YES') {
                 await frm.set_value('amc_executive', row.amc_executive || '');
                 await frm.set_value('amc_executive2', row.amc_executive2 || '');
-                if (frm.is_new()) {
-                    if (row.amc_executive) {
-                        await frm.set_value('executive', row.amc_executive);
-                    }
-                    if (row.amc_executive2) {
-                        await frm.set_value('executive2', row.amc_executive2);
-                    }
-                }
             } else {
                 await frm.set_value('amc_executive', '');
                 await frm.set_value('amc_executive2', '');
