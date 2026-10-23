@@ -97,9 +97,21 @@ class support_ticket(Document):
 
     def before_save(self):
         self.sync_amc_details()
+        self.sync_followup_date()
         self.update_list_sort_order()
         self.update_timing_metrics()
         self.sync_renewal_details()
+
+    def sync_followup_date(self):
+        if self.status == "FOLLOWUP":
+            latest_date = None
+            for row in reversed(self.get("followup_history") or []):
+                if row.followup_date:
+                    latest_date = frappe.utils.getdate(row.followup_date)
+                    break
+            self.followup_date = latest_date
+        elif self.status != "PENDING":
+            self.followup_date = None
 
         
 

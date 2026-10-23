@@ -1,7 +1,8 @@
 {
  "actions": [],
  "allow_bulk_edit": 1,
- "autoname": "CUST-.#####",
+ "autoname": "autoname",
+ "naming_rule": "By script",
  "creation": "2026-09-25 13:18:42.916885",
  "doctype": "DocType",
  "engine": "InnoDB",

@@ -31,6 +31,7 @@
   "status",
   "sub_status",
   "sub_sub_status",
+  "followup_date",
   "followup_section",
   "followup_history",
   "followup_history_html",
@@ -208,6 +209,14 @@
    "fieldname": "sub_sub_status",
    "fieldtype": "Data",
    "label": "Sub Status",
+   "read_only": 1
+  },
+  {
+   "fieldname": "followup_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Followup Date",
    "read_only": 1
   },
   {

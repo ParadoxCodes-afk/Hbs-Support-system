@@ -8,6 +8,20 @@ from frappe.model.document import Document
 
 class support_ticket_ledger(Document):
 
+    def autoname(self):
+        if not self.name or self.name.startswith("new-support-ticket-ledger"):
+            if self.unique_id:
+                self.name = self.unique_id
+            else:
+                from hbs_ticket_system.hbs_support_system.doctype.hbs_support_settings.hbs_support_settings import get_next_customer_unique_id
+                next_id = get_next_customer_unique_id()
+                if next_id:
+                    self.name = next_id
+                    self.unique_id = next_id
+        else:
+            if not self.unique_id:
+                self.unique_id = self.name
+
     def before_insert(self):
         if not self.unique_id and self.name:
             self.unique_id = self.name
