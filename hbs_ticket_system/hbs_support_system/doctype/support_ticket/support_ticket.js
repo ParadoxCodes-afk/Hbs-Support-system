@@ -1115,8 +1115,11 @@ function open_autofill_dialog(frm) {
                 ? `<b>${esc(row.contact_name)}</b>`
                 : `<span class="text-muted" style="font-style: italic;">No Contact</span>`;
 
-            const phoneDisplay = row.contact_phone
-                ? esc(row.contact_phone)
+            let phoneText = (row.contact_phone && row.phone_number)
+                ? `${row.contact_phone} / ${row.phone_number}`
+                : (row.contact_phone || row.phone_number || '');
+            const phoneDisplay = phoneText
+                ? esc(phoneText)
                 : `<span class="text-muted">-</span>`;
 
             html += `
@@ -1157,7 +1160,7 @@ function open_autofill_dialog(frm) {
             await frm.set_value('amc_expiry_date', row.amc_expiry_date || '');
             await frm.set_value('priority', row.amc_status === 'YES' ? 'P1' : 'P2');
             await frm.set_value('contact_name', row.contact_name || '');
-            await frm.set_value('contact_phone', row.contact_phone || '');
+            await frm.set_value('contact_phone', row.contact_phone || row.phone_number || '');
 
             if (row.amc_status === 'YES') {
                 await frm.set_value('amc_executive', row.amc_executive || '');

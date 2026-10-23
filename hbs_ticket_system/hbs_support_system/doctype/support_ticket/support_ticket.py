@@ -450,7 +450,8 @@ def search_ledger_contacts(query=""):
             l.executive AS amc_executive,
             l.executive2 AS amc_executive2,
             c.contact_name,
-            c.contact_phone
+            c.contact_phone,
+            c.phone_number
         FROM
             `tabsupport_ticket_ledger` l
         LEFT JOIN
@@ -466,11 +467,12 @@ def search_ledger_contacts(query=""):
             OR l.party_name LIKE %s
             OR c.contact_name LIKE %s
             OR c.contact_phone LIKE %s
+            OR c.phone_number LIKE %s
         ORDER BY
             l.name ASC, s.idx ASC, c.idx ASC
         LIMIT 50
     """
-    return frappe.db.sql(sql, (like_q, like_q, like_q, like_q, like_q, like_q), as_dict=True)
+    return frappe.db.sql(sql, (like_q, like_q, like_q, like_q, like_q, like_q, like_q), as_dict=True)
 
 
 @frappe.whitelist()

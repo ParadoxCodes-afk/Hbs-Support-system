@@ -307,21 +307,16 @@ def process_import_batch(batch_token, start_idx=0, batch_size=50):
 
             # 9. Contact Persons
             contact_person = str(row.get("Conctact Person") or row.get("Contact Person") or "").strip()
-            phone = normalize_phone(row.get("Phone"))
-            mobile = normalize_phone(row.get("Mobile"))
+            phone = normalize_phone(row.get("Phone") or row.get("Phone Number") or row.get("Phone No"))
+            mobile = normalize_phone(row.get("Mobile") or row.get("Mobile No") or row.get("Mobile Number"))
 
             contacts = []
             if contact_person or mobile or phone:
-                primary_phone = mobile or phone or ""
                 contacts.append({
                     "contact_name": contact_person or "Primary Contact",
-                    "contact_phone": primary_phone
+                    "contact_phone": mobile or "",
+                    "phone_number": phone or ""
                 })
-                if mobile and phone and mobile != phone:
-                    contacts.append({
-                        "contact_name": f"{contact_person} (Office)",
-                        "contact_phone": phone
-                    })
 
             # Match existing customer by any of the serial numbers
             matched_parent = None
@@ -366,15 +361,23 @@ def process_import_batch(batch_token, start_idx=0, batch_size=50):
 
                 # Update / Append contact details
                 if contacts:
-                    existing_phones = {c.contact_phone for c in (doc.get("contact_details") or []) if c.contact_phone}
-                    for new_c in contacts:
-                        if new_c["contact_phone"] not in existing_phones:
-                            doc.append("contact_details", new_c)
-                            existing_phones.add(new_c["contact_phone"])
-                        else:
-                            for ex_c in (doc.get("contact_details") or []):
-                                if ex_c.contact_phone == new_c["contact_phone"] and new_c["contact_name"]:
-                                    ex_c.contact_name = new_c["contact_name"]
+                    new_c = contacts[0]
+                    # Remove legacy "(Office)" child rows for this contact
+                    for off_r in [r for r in (doc.get("contact_details") or []) if (r.contact_name or "").strip().endswith("(Office)")]:
+                        if not phone and off_r.contact_phone:
+                            new_c["phone_number"] = off_r.contact_phone
+                        doc.remove(off_r)
+
+                    if doc.get("contact_details"):
+                        c_row = doc.contact_details[0]
+                        if contact_person:
+                            c_row.contact_name = contact_person
+                        if mobile:
+                            c_row.contact_phone = mobile
+                        if phone or new_c.get("phone_number"):
+                            c_row.phone_number = phone or new_c.get("phone_number")
+                    else:
+                        doc.append("contact_details", new_c)
 
                 doc.save(ignore_permissions=True)
                 updated_count += 1
