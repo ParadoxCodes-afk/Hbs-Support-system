@@ -592,12 +592,38 @@ frappe.ui.form.on('support_ticket', {
             frm.set_value('email', '');
             frm.set_value('amc_status', '');
             frm.set_value('amc_expiry_date', '');
+            frm.set_value('amc_executive', '');
+            frm.set_value('amc_executive2', '');
             frm.set_value('priority', '');
             frm.set_value('contact_name', '');
             frm.set_value('contact_phone', '');
             highlight_amc_fields(frm);
             clear_renewal_fields(frm);
         } else {
+            const serial = String(frm.doc.serial_no).trim();
+            if (serial.length === 9) {
+                frappe.db.get_value('support_ticket_ledger', serial, ['party_name', 'email', 'amc_status', 'amc_expiry_date', 'executive', 'executive2'], (r) => {
+                    if (r && r.party_name) {
+                        frm.set_value('party_name', r.party_name);
+                        frm.set_value('email', r.email || '');
+                        frm.set_value('amc_status', r.amc_status || 'NO');
+                        frm.set_value('amc_expiry_date', r.amc_expiry_date || '');
+                        frm.set_value('priority', r.amc_status === 'YES' ? 'P1' : 'P2');
+                        if (r.amc_status === 'YES') {
+                            frm.set_value('amc_executive', r.executive || '');
+                            frm.set_value('amc_executive2', r.executive2 || '');
+                            if (frm.is_new()) {
+                                if (r.executive) frm.set_value('executive', r.executive);
+                                if (r.executive2) frm.set_value('executive2', r.executive2);
+                            }
+                        } else {
+                            frm.set_value('amc_executive', '');
+                            frm.set_value('amc_executive2', '');
+                        }
+                        highlight_amc_fields(frm);
+                    }
+                });
+            }
             fetch_tally_renewal_details(frm, true);
         }
     },
@@ -823,7 +849,7 @@ function open_executive_selection_dialog(frm) {
 // ==========================================================
 function highlight_amc_fields(frm) {
     const is_amc = frm.doc && frm.doc.amc_status === 'YES';
-    const fields = ['amc_status', 'amc_expiry_date'];
+    const fields = ['amc_status', 'amc_expiry_date', 'amc_executive', 'amc_executive2'];
     const expiry_field = frm.get_field('amc_expiry_date');
 
     if (is_amc && frm.doc.amc_expiry_date) {
@@ -917,6 +943,8 @@ function highlight_amc_fields(frm) {
     }
 
     frm.toggle_display('amc_expiry_date', Boolean(is_amc || (frm.doc && frm.doc.amc_status && frm.doc.amc_status !== 'NO')));
+    frm.toggle_display('amc_executive', Boolean(is_amc));
+    frm.toggle_display('amc_executive2', Boolean(is_amc));
 }
 
 
@@ -1122,6 +1150,22 @@ function open_autofill_dialog(frm) {
             await frm.set_value('priority', row.amc_status === 'YES' ? 'P1' : 'P2');
             await frm.set_value('contact_name', row.contact_name || '');
             await frm.set_value('contact_phone', row.contact_phone || '');
+
+            if (row.amc_status === 'YES') {
+                await frm.set_value('amc_executive', row.amc_executive || '');
+                await frm.set_value('amc_executive2', row.amc_executive2 || '');
+                if (frm.is_new()) {
+                    if (row.amc_executive) {
+                        await frm.set_value('executive', row.amc_executive);
+                    }
+                    if (row.amc_executive2) {
+                        await frm.set_value('executive2', row.amc_executive2);
+                    }
+                }
+            } else {
+                await frm.set_value('amc_executive', '');
+                await frm.set_value('amc_executive2', '');
+            }
 
             highlight_amc_fields(frm);
             set_party_details_state(frm);

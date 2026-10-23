@@ -18,6 +18,8 @@
   "contact_phone",
   "amc_status",
   "amc_expiry_date",
+  "amc_executive",
+  "amc_executive2",
   "lead_details_section",
   "call_source",
   "call_type",
@@ -111,6 +113,22 @@
    "fieldname": "amc_expiry_date",
    "fieldtype": "Date",
    "label": "AMC Expiry Date",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.amc_status=='YES'",
+   "fieldname": "amc_executive",
+   "fieldtype": "Link",
+   "label": "AMC Executive 1",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.amc_status=='YES'",
+   "fieldname": "amc_executive2",
+   "fieldtype": "Link",
+   "label": "AMC Executive 2",
+   "options": "User",
    "read_only": 1
   },
   {

@@ -3,6 +3,8 @@ frappe.listview_settings['support_ticket'] = {
     add_fields: [
         'amc_status',
         'amc_expiry_date',
+        'amc_executive',
+        'amc_executive2',
         'list_sort_order',
         'creation',
         'status',

@@ -62,6 +62,7 @@ class support_ticket(Document):
         self.add_creation_followup()
 
     def before_save(self):
+        self.sync_amc_details()
         self.update_list_sort_order()
         self.update_timing_metrics()
         self.sync_renewal_details()
@@ -119,6 +120,33 @@ class support_ticket(Document):
                 self.total_time_taken = ""
                 self.followup_time_taken_mins = 0
                 self.followup_time_taken = ""
+
+    def sync_amc_details(self):
+        if not getattr(self, "serial_no", None):
+            self.amc_executive = None
+            self.amc_executive2 = None
+            return
+
+        ledger = frappe.db.get_value(
+            "support_ticket_ledger",
+            self.serial_no,
+            ["amc_status", "amc_expiry_date", "executive", "executive2"],
+            as_dict=True
+        )
+        if ledger and ledger.amc_status == "YES":
+            self.amc_status = "YES"
+            if ledger.amc_expiry_date:
+                self.amc_expiry_date = ledger.amc_expiry_date
+            self.amc_executive = ledger.executive
+            self.amc_executive2 = ledger.executive2
+            if self.is_new():
+                if ledger.executive:
+                    self.executive = ledger.executive
+                if ledger.executive2:
+                    self.executive2 = ledger.executive2
+        else:
+            self.amc_executive = None
+            self.amc_executive2 = None
 
     def sync_renewal_details(self):
         if not getattr(self, "serial_no", None):
@@ -354,6 +382,8 @@ def search_ledger_contacts(query=""):
             l.email,
             l.amc_status,
             l.amc_expiry_date,
+            l.executive AS amc_executive,
+            l.executive2 AS amc_executive2,
             c.contact_name,
             c.contact_phone
         FROM
