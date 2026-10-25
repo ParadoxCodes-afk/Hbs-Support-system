@@ -321,11 +321,11 @@ def process_import_batch(batch_token, start_idx=0, batch_size=50):
             # Match existing customer by any of the serial numbers
             matched_parent = None
             for s in valid_serials:
-                p = frappe.db.get_value("support_ticket_ledger_serials", {"serial_no": s}, "parent")
+                p = frappe.db.get_value("support_ticket_ledger", {"serial_no": s}, "name")
                 if not p:
                     p = frappe.db.get_value("support_ticket_ledger", s, "name")
                 if not p:
-                    p = frappe.db.get_value("support_ticket_ledger", {"serial_no": s}, "name")
+                    p = frappe.db.get_value("support_ticket_ledger_serials", {"serial_no": s}, "parent")
                 if p:
                     matched_parent = p
                     break

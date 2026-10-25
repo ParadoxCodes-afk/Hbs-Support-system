@@ -30,6 +30,29 @@ frappe.ui.form.on('support_ticket_ledger', {
 
 });
 
+frappe.ui.form.on('support_ticket_ledger_serials', {
+    serial_no(frm, cdt, cdn) {
+        sync_primary_serial(frm);
+    },
+    serial_numbers_remove(frm) {
+        sync_primary_serial(frm);
+    },
+    serial_numbers_add(frm) {
+        sync_primary_serial(frm);
+    }
+});
+
+function sync_primary_serial(frm) {
+    const rows = frm.doc.serial_numbers || [];
+    for (let r of rows) {
+        if (r.serial_no && String(r.serial_no).trim()) {
+            frm.set_value('serial_no', String(r.serial_no).trim());
+            return;
+        }
+    }
+    frm.set_value('serial_no', '');
+}
+
 function check_amc_expiry_warning(frm) {
     const $wrapper = frm.fields_dict.amc_status && frm.fields_dict.amc_status.$wrapper;
     if (!$wrapper) return;

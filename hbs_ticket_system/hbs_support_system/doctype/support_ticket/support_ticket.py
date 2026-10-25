@@ -58,11 +58,13 @@ def get_ledger_for_serial(serial_no):
     if not serial_no:
         return None
 
-    parent = frappe.db.get_value("support_ticket_ledger_serials", {"serial_no": serial_no}, "parent")
+    # 1. Prioritize primary serial_no
+    parent = frappe.db.get_value("support_ticket_ledger", {"serial_no": serial_no}, "name")
     if not parent:
         parent = frappe.db.get_value("support_ticket_ledger", serial_no, "name")
+    # 2. Fall back to child table serial_numbers (most recently created)
     if not parent:
-        parent = frappe.db.get_value("support_ticket_ledger", {"serial_no": serial_no}, "name")
+        parent = frappe.db.get_value("support_ticket_ledger_serials", {"serial_no": serial_no}, "parent", order_by="creation desc")
     if not parent:
         return None
 

@@ -35,8 +35,7 @@ class support_ticket_ledger(Document):
         if self.amc_status == "YES" and self.amc_start_date and self.amc_period and not self.amc_expiry_date:
             self.amc_expiry_date = self.get_calculated_amc_expiry()
 
-        # Validate and sync child serial numbers
-        seen_serials = set()
+        # Validate child serial numbers (duplicates allowed)
         cleaned_serials = []
         for row in self.get("serial_numbers") or []:
             s = str(row.serial_no or "").strip()
@@ -47,13 +46,10 @@ class support_ticket_ledger(Document):
                 continue
             if not s.isdigit() or len(s) != 9:
                 frappe.throw(_(f"Serial No '{s}' must contain exactly 9 digits."))
-            if s in seen_serials:
-                frappe.throw(_(f"Duplicate Serial No '{s}' entered in this customer record."))
-            seen_serials.add(s)
             cleaned_serials.append(s)
 
-        # Sync header serial_no for backward compatibility
-        if cleaned_serials and not self.serial_no:
+        # Sync header primary serial_no with the 1st row of serial_numbers table
+        if cleaned_serials:
             self.serial_no = cleaned_serials[0]
         elif self.serial_no and not cleaned_serials:
             s_hdr = str(self.serial_no).strip()
@@ -61,6 +57,23 @@ class support_ticket_ledger(Document):
                 s_hdr = s_hdr[:-2]
             if s_hdr.isdigit() and len(s_hdr) == 9:
                 self.append("serial_numbers", {"serial_no": s_hdr})
+                self.serial_no = s_hdr
+            else:
+                self.serial_no = None
+        else:
+            self.serial_no = None
+
+        # Enforce unique primary serial_no across all support ticket ledgers
+        if self.serial_no:
+            filters = {"serial_no": self.serial_no}
+            if self.name and not self.is_new():
+                filters["name"] = ["!=", self.name]
+            existing = frappe.db.get_value("support_ticket_ledger", filters, ["name", "party_name"], as_dict=True)
+            if existing:
+                frappe.throw(
+                    _(f"Serial No '{self.serial_no}' is already registered as the primary Serial No for customer '{existing.party_name}' ({existing.name}). Please change or reorder the first serial number."),
+                    title=_("Duplicate Primary Serial No")
+                )
 
     def get_calculated_amc_expiry(self):
         if not self.amc_start_date or not self.amc_period:
