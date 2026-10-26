@@ -104,7 +104,7 @@ def get_ledger_for_serial(serial_no):
 
     for c in contracts:
         cat = (c.category or "").strip().upper()
-        is_active = (c.expiry_date and str(c.expiry_date) >= today_str)
+        is_active = (not c.expiry_date) or (str(c.expiry_date) >= today_str)
 
         if "AMC" in cat and is_active:
             amc_active = True
