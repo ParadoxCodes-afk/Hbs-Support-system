@@ -315,6 +315,8 @@ function show_ledger_excel_import_dialog(listview) {
                             <code style="background: #e2e8f0; padding: 2px 5px; border-radius: 4px;">Company Name</code>,
                             <code style="background: #e2e8f0; padding: 2px 5px; border-radius: 4px;">Contact Person</code>,
                             <code style="background: #e2e8f0; padding: 2px 5px; border-radius: 4px;">Mobile / Phone</code>,
+                            <code style="background: #e2e8f0; padding: 2px 5px; border-radius: 4px;">Type (AMC / Cloud / Module)</code>,
+                            <code style="background: #e2e8f0; padding: 2px 5px; border-radius: 4px;">IP Address</code>,
                             <code style="background: #e2e8f0; padding: 2px 5px; border-radius: 4px;">Starts From</code>,
                             <code style="background: #e2e8f0; padding: 2px 5px; border-radius: 4px;">Expiry Date</code>,
                             <code style="background: #e2e8f0; padding: 2px 5px; border-radius: 4px;">Total Amount</code>,

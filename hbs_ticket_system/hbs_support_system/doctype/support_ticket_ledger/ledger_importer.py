@@ -82,6 +82,40 @@ def match_user(name_str, user_map):
     return None
 
 
+def get_or_create_contract_product(raw_type):
+    """Resolve or create support_contract_product based on raw Type column."""
+    raw = (raw_type or "").strip()
+    if not raw or raw == "1":
+        raw = "AMC"
+
+    clean_upper = raw.upper()
+    if "AMC" in clean_upper:
+        category = "AMC"
+        product_name = "Annual Maintenance Contract"
+    elif "CLOUD" in clean_upper:
+        category = "Cloud"
+        product_name = "Tally on Cloud" if clean_upper in ("CLOUD", "TALLY ON CLOUD", "CLOUD RENEWAL") else raw
+    elif "MODUL" in clean_upper:
+        category = "Module"
+        product_name = "Custom Module" if clean_upper in ("MODULE", "MODULES", "CUSTOM MODULE") else raw
+    else:
+        category = "Other"
+        product_name = raw
+
+    # Ensure product exists in DB so Link validation passes
+    if not frappe.db.exists("support_contract_product", product_name):
+        p_doc = frappe.get_doc({
+            "doctype": "support_contract_product",
+            "product_name": product_name,
+            "category": category,
+            "default_period": "YEARLY",
+            "standard_rate": 0.0
+        })
+        p_doc.insert(ignore_permissions=True)
+
+    return product_name, category
+
+
 def read_excel_rows(file_path):
     """Read .xlsx or .xls file robustly, checking magic bytes for modern zip-based vs legacy binary."""
     with open(file_path, "rb") as f:
@@ -318,6 +352,34 @@ def process_import_batch(batch_token, start_idx=0, batch_size=50):
                     "phone_number": phone or ""
                 })
 
+            # 10. Multi-item Contract Details
+            raw_type = (row.get("Type") or row.get("type") or row.get("Contract Type") or
+                        row.get("Contract Name") or row.get("Product") or row.get("Category") or "").strip()
+            product, category = get_or_create_contract_product(raw_type)
+
+            raw_ip = str(row.get("IP Address") or "").strip()
+            ip_address = raw_ip if raw_ip and raw_ip.lower() not in ("none", "null", "-") else None
+
+            raw_qty = row.get("Users") or row.get("Qty")
+            try:
+                qty = float(raw_qty or 1.0)
+            except Exception:
+                qty = 1.0
+
+            contract_row = {
+                "product": product,
+                "category": category,
+                "period": cycle,
+                "start_date": start_date,
+                "expiry_date": expiry_date,
+                "qty": qty,
+                "rate": amount,
+                "amount": amount,
+                "ip_address": ip_address,
+                "executive1": exec1,
+                "executive2": exec2
+            }
+
             # Match existing customer by any of the serial numbers
             matched_parent = None
             for s in valid_serials:
@@ -379,6 +441,34 @@ def process_import_batch(batch_token, start_idx=0, batch_size=50):
                     else:
                         doc.append("contact_details", new_c)
 
+                # Sync contract row into contracts child table
+                if frappe.db.exists("DocType", "support_ticket_ledger_contracts"):
+                    matched_contract = None
+                    for c_row in (doc.get("contracts") or []):
+                        if c_row.product == product or (category and c_row.category == category):
+                            matched_contract = c_row
+                            break
+
+                    if matched_contract:
+                        matched_contract.product = product
+                        matched_contract.category = category
+                        matched_contract.period = cycle
+                        if start_date:
+                            matched_contract.start_date = start_date
+                        if expiry_date:
+                            matched_contract.expiry_date = expiry_date
+                        matched_contract.qty = qty
+                        matched_contract.rate = amount
+                        matched_contract.amount = amount
+                        if ip_address:
+                            matched_contract.ip_address = ip_address
+                        if exec1:
+                            matched_contract.executive1 = exec1
+                        if exec2:
+                            matched_contract.executive2 = exec2
+                    else:
+                        doc.append("contracts", contract_row)
+
                 doc.save(ignore_permissions=True)
                 updated_count += 1
             else:
@@ -401,6 +491,9 @@ def process_import_batch(batch_token, start_idx=0, batch_size=50):
                     "serial_numbers": serial_rows,
                     "contact_details": contacts
                 }
+                if frappe.db.exists("DocType", "support_ticket_ledger_contracts"):
+                    doc_dict["contracts"] = [contract_row]
+
                 new_doc = frappe.get_doc(doc_dict)
                 new_doc.insert(ignore_permissions=True)
                 inserted_count += 1
