@@ -58,13 +58,11 @@ def get_ledger_for_serial(serial_no):
     if not serial_no:
         return None
 
-    # 1. Prioritize primary serial_no
-    parent = frappe.db.get_value("support_ticket_ledger", {"serial_no": serial_no}, "name")
+    parent = frappe.db.get_value("support_ticket_ledger_serials", {"serial_no": serial_no}, "parent")
     if not parent:
         parent = frappe.db.get_value("support_ticket_ledger", serial_no, "name")
-    # 2. Fall back to child table serial_numbers (most recently created)
     if not parent:
-        parent = frappe.db.get_value("support_ticket_ledger_serials", {"serial_no": serial_no}, "parent", order_by="creation desc")
+        parent = frappe.db.get_value("support_ticket_ledger", {"serial_no": serial_no}, "name")
     if not parent:
         return None
 
@@ -81,7 +79,58 @@ def get_ledger_for_serial(serial_no):
             "executive2 as amc_executive2"
         ],
         as_dict=True
-    )
+    ) or {}
+
+    # Evaluate multi-item contracts
+    contracts = []
+    if frappe.db.exists("DocType", "support_ticket_ledger_contracts"):
+        contracts = frappe.get_all(
+            "support_ticket_ledger_contracts",
+            filters={"parent": parent},
+            fields=["product", "category", "status", "start_date", "expiry_date", "executive1", "executive2"],
+            order_by="expiry_date desc"
+        )
+
+    today_str = frappe.utils.nowdate()
+    amc_active = False
+    cloud_active = False
+    modules_active = False
+    latest_amc_exp = None
+    latest_cloud_exp = None
+    latest_mod_exp = None
+    c_exec1 = None
+    c_exec2 = None
+
+    for c in contracts:
+        cat = (c.category or "").strip().upper()
+        is_active = (c.expiry_date and str(c.expiry_date) >= today_str)
+
+        if "AMC" in cat and is_active:
+            amc_active = True
+            if not latest_amc_exp or c.expiry_date > latest_amc_exp:
+                latest_amc_exp = c.expiry_date
+                c_exec1 = c.executive1 or c_exec1
+                c_exec2 = c.executive2 or c_exec2
+        elif "CLOUD" in cat and is_active:
+            cloud_active = True
+            if not latest_cloud_exp or c.expiry_date > latest_cloud_exp:
+                latest_cloud_exp = c.expiry_date
+        elif "MODULE" in cat and is_active:
+            modules_active = True
+            if not latest_mod_exp or c.expiry_date > latest_mod_exp:
+                latest_mod_exp = c.expiry_date
+
+    if contracts:
+        ledger["amc_status"] = "YES" if amc_active else "NO"
+        ledger["amc_expiry_date"] = latest_amc_exp
+        if c_exec1: ledger["amc_executive"] = c_exec1
+        if c_exec2: ledger["amc_executive2"] = c_exec2
+
+    ledger["cloud_status"] = "YES" if cloud_active else "NO"
+    ledger["cloud_expiry_date"] = latest_cloud_exp
+    ledger["modules_status"] = "YES" if modules_active else "NO"
+    ledger["modules_expiry_date"] = latest_mod_exp
+
     return ledger
 
 
@@ -193,9 +242,18 @@ class support_ticket(Document):
                 self.amc_status = ledger.get("amc_status") or "NO"
                 self.amc_executive = None
                 self.amc_executive2 = None
+
+            self.cloud_status = ledger.get("cloud_status") or "NO"
+            self.cloud_expiry_date = ledger.get("cloud_expiry_date")
+            self.modules_status = ledger.get("modules_status") or "NO"
+            self.modules_expiry_date = ledger.get("modules_expiry_date")
         else:
             self.amc_executive = None
             self.amc_executive2 = None
+            self.cloud_status = "NO"
+            self.cloud_expiry_date = None
+            self.modules_status = "NO"
+            self.modules_expiry_date = None
 
     def sync_renewal_details(self):
         if not getattr(self, "serial_no", None):

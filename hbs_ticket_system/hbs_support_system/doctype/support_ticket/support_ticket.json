@@ -21,6 +21,10 @@
   "amc_expiry_date",
   "amc_executive",
   "amc_executive2",
+  "cloud_status",
+  "cloud_expiry_date",
+  "modules_status",
+  "modules_expiry_date",
   "lead_details_section",
   "call_source",
   "call_type",
@@ -142,6 +146,34 @@
    "read_only": 1
   },
   {
+   "default": "NO",
+   "fieldname": "cloud_status",
+   "fieldtype": "Select",
+   "label": "Cloud Status",
+   "options": "YES\nNO",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cloud_expiry_date",
+   "fieldtype": "Date",
+   "label": "Cloud Expiry Date",
+   "read_only": 1
+  },
+  {
+   "default": "NO",
+   "fieldname": "modules_status",
+   "fieldtype": "Select",
+   "label": "Modules Status",
+   "options": "YES\nNO",
+   "read_only": 1
+  },
+  {
+   "fieldname": "modules_expiry_date",
+   "fieldtype": "Date",
+   "label": "Modules Expiry Date",
+   "read_only": 1
+  },
+  {
    "fieldname": "lead_details_section",
    "fieldtype": "Section Break",
    "label": "Lead Details"
@@ -212,12 +244,12 @@
    "read_only": 1
   },
   {
+   "default": "Today",
    "fieldname": "followup_date",
    "fieldtype": "Date",
    "in_list_view": 1,
    "in_standard_filter": 1,
-   "label": "Follow up Date",
-   "default": "Today"
+   "label": "Follow up Date"
   },
   {
    "fieldname": "followup_section",
@@ -382,7 +414,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-10-21 14:01:19.373609",
+ "modified": "2026-10-26 14:00:00.000000",
  "modified_by": "Administrator",
  "module": "HBS Support System",
  "name": "support_ticket",

@@ -593,6 +593,10 @@ frappe.ui.form.on('support_ticket', {
             frm.set_value('email', '');
             frm.set_value('amc_status', '');
             frm.set_value('amc_expiry_date', '');
+            frm.set_value('cloud_status', '');
+            frm.set_value('cloud_expiry_date', '');
+            frm.set_value('modules_status', '');
+            frm.set_value('modules_expiry_date', '');
             frm.set_value('amc_executive', '');
             frm.set_value('amc_executive2', '');
             frm.set_value('priority', '');
@@ -615,6 +619,10 @@ frappe.ui.form.on('support_ticket', {
                             frm.set_value('email', res.email || '');
                             frm.set_value('amc_status', res.amc_status || 'NO');
                             frm.set_value('amc_expiry_date', res.amc_expiry_date || '');
+                            frm.set_value('cloud_status', res.cloud_status || 'NO');
+                            frm.set_value('cloud_expiry_date', res.cloud_expiry_date || '');
+                            frm.set_value('modules_status', res.modules_status || 'NO');
+                            frm.set_value('modules_expiry_date', res.modules_expiry_date || '');
                             frm.set_value('priority', res.amc_status === 'YES' ? 'P1' : 'P2');
                             if (res.amc_status === 'YES') {
                                 frm.set_value('amc_executive', res.amc_executive || '');
