@@ -42,7 +42,10 @@ frappe.ui.form.on('support_ticket_ledger_contracts', {
                     if (d.default_period && !row.period) {
                         frappe.model.set_value(cdt, cdn, 'period', d.default_period);
                     }
-                    if (d.standard_rate !== undefined && (!row.rate || row.rate == 0)) {
+                    if ((d.category || '').toUpperCase().includes('AMC')) {
+                        frappe.model.set_value(cdt, cdn, 'qty', null);
+                        frappe.model.set_value(cdt, cdn, 'rate', null);
+                    } else if (d.standard_rate !== undefined && (!row.rate || row.rate == 0)) {
                         frappe.model.set_value(cdt, cdn, 'rate', d.standard_rate);
                     }
                 });
@@ -68,9 +71,11 @@ frappe.ui.form.on('support_ticket_ledger_contracts', {
 
 function calc_row_amount(frm, cdt, cdn) {
     let row = locals[cdt][cdn];
-    let qty = parseFloat(row.qty) || 1;
-    let rate = parseFloat(row.rate) || 0;
-    frappe.model.set_value(cdt, cdn, 'amount', Math.round(qty * rate * 100) / 100);
+    let qty = parseFloat(row.qty);
+    let rate = parseFloat(row.rate);
+    if (!isNaN(qty) && !isNaN(rate) && qty > 0 && rate > 0) {
+        frappe.model.set_value(cdt, cdn, 'amount', Math.round(qty * rate * 100) / 100);
+    }
 }
 
 function calc_row_expiry(frm, cdt, cdn) {

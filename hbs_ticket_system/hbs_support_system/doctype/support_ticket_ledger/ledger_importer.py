@@ -360,11 +360,18 @@ def process_import_batch(batch_token, start_idx=0, batch_size=50):
             raw_ip = str(row.get("IP Address") or "").strip()
             ip_address = raw_ip if raw_ip and raw_ip.lower() not in ("none", "null", "-") else None
 
-            raw_qty = row.get("Users") or row.get("Qty")
-            try:
-                qty = float(raw_qty or 1.0)
-            except Exception:
-                qty = 1.0
+            # For AMC, qty and rate remain empty (None); amount is direct
+            is_amc = "AMC" in (category or "").upper()
+            if is_amc:
+                qty_val = None
+                rate_val = None
+            else:
+                raw_qty = row.get("Users") or row.get("Qty")
+                try:
+                    qty_val = float(raw_qty) if raw_qty not in (None, "") else 1.0
+                except Exception:
+                    qty_val = 1.0
+                rate_val = round(amount / qty_val, 2) if qty_val else amount
 
             contract_row = {
                 "product": product,
@@ -372,8 +379,9 @@ def process_import_batch(batch_token, start_idx=0, batch_size=50):
                 "period": cycle,
                 "start_date": start_date,
                 "expiry_date": expiry_date,
-                "qty": qty,
-                "rate": amount,
+                "visits": visits,
+                "qty": qty_val,
+                "rate": rate_val,
                 "amount": amount,
                 "ip_address": ip_address,
                 "executive1": exec1,
@@ -457,8 +465,9 @@ def process_import_batch(batch_token, start_idx=0, batch_size=50):
                             matched_contract.start_date = start_date
                         if expiry_date:
                             matched_contract.expiry_date = expiry_date
-                        matched_contract.qty = qty
-                        matched_contract.rate = amount
+                        matched_contract.visits = visits
+                        matched_contract.qty = qty_val
+                        matched_contract.rate = rate_val
                         matched_contract.amount = amount
                         if ip_address:
                             matched_contract.ip_address = ip_address

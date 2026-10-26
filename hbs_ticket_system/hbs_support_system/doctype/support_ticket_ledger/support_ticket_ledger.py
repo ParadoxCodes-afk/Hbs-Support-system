@@ -66,9 +66,12 @@ class support_ticket_ledger(Document):
             if row.product and not row.category:
                 row.category = frappe.db.get_value("support_contract_product", row.product, "category") or "Other"
 
-            qty = float(row.qty or 1)
+            qty = float(row.qty or 0)
             rate = float(row.rate or 0)
-            row.amount = round(qty * rate, 2)
+            if qty > 0 and rate > 0:
+                row.amount = round(qty * rate, 2)
+            else:
+                row.amount = round(float(row.amount or 0), 2)
 
             if row.start_date and row.period and not row.expiry_date:
                 row.expiry_date = calculate_contract_expiry(row.start_date, row.period)
@@ -86,6 +89,8 @@ class support_ticket_ledger(Document):
                 has_active_amc = True
                 if not latest_amc_exp or str(row.expiry_date) > str(latest_amc_exp):
                     latest_amc_exp = row.expiry_date
+                if row.visits and not self.visits:
+                    self.visits = row.visits
                 if row.executive1 and not self.executive:
                     self.executive = row.executive1
                 if row.executive2 and not self.executive2:
@@ -191,8 +196,9 @@ def update_customer_contracts(ledger_name, contracts_json):
             "period": r.get("period"),
             "start_date": r.get("start_date") or None,
             "expiry_date": r.get("expiry_date") or None,
-            "qty": float(r.get("qty") or 1),
-            "rate": float(r.get("rate") or 0),
+            "visits": r.get("visits") or None,
+            "qty": float(r.get("qty")) if r.get("qty") not in (None, "") else None,
+            "rate": float(r.get("rate")) if r.get("rate") not in (None, "") else None,
             "amount": float(r.get("amount") or 0),
             "ip_address": r.get("ip_address"),
             "unique_id": r.get("unique_id"),

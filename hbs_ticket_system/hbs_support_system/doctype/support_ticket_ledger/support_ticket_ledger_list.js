@@ -102,6 +102,9 @@ function render_contracts_dialog(ledger_name, contracts, products) {
                     ${status_badge}
                 </td>
                 <td style="padding: 8px 6px;">
+                    <input type="text" class="form-control input-xs c-visits" value="${frappe.utils.escape_html(c.visits || '')}" placeholder="Visits" style="font-size: 11px; height: 28px; width: 70px;">
+                </td>
+                <td style="padding: 8px 6px;">
                     <input type="number" class="form-control input-xs c-amount" value="${c.amount || 0}" style="font-size: 12px; height: 28px; width: 90px;">
                 </td>
                 <td style="padding: 8px 6px;">
@@ -142,6 +145,7 @@ function render_contracts_dialog(ledger_name, contracts, products) {
                                     <th>Start Date</th>
                                     <th>Expiry Date</th>
                                     <th>Status</th>
+                                    <th>Visits</th>
                                     <th>Amount</th>
                                     <th>Remarks</th>
                                     <th style="width: 40px;"></th>
@@ -168,6 +172,7 @@ function render_contracts_dialog(ledger_name, contracts, products) {
                     period: $r.find('.c-period').val() || 'YEARLY',
                     start_date: $r.find('.c-start-date').val() || null,
                     expiry_date: $r.find('.c-expiry-date').val() || null,
+                    visits: $r.find('.c-visits').val() || null,
                     amount: parseFloat($r.find('.c-amount').val()) || 0,
                     remarks: $r.find('.c-remarks').val() || ''
                 });
@@ -272,6 +277,9 @@ function render_contracts_dialog(ledger_name, contracts, products) {
                 </td>
                 <td style="padding: 8px 6px; text-align: center;">
                     <span class="badge badge-success" style="background:#dcfce7; color:#15803d; padding:3px 8px; border-radius:4px; font-size:11px;">Active</span>
+                </td>
+                <td style="padding: 8px 6px;">
+                    <input type="text" class="form-control input-xs c-visits" value="" placeholder="Visits" style="font-size: 11px; height: 28px; width: 70px;">
                 </td>
                 <td style="padding: 8px 6px;">
                     <input type="number" class="form-control input-xs c-amount" value="0" style="font-size: 12px; height: 28px; width: 90px;">
