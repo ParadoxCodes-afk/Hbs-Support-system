@@ -60,6 +60,8 @@ class support_ticket_ledger(Document):
 
         # Process and validate contracts
         today_str = frappe.utils.nowdate()
+        has_active_amc = False
+        latest_amc_exp = None
         for row in self.get("contracts") or []:
             if row.product and not row.category:
                 row.category = frappe.db.get_value("support_contract_product", row.product, "category") or "Other"
@@ -71,10 +73,27 @@ class support_ticket_ledger(Document):
             if row.start_date and row.period and not row.expiry_date:
                 row.expiry_date = calculate_contract_expiry(row.start_date, row.period)
 
+            is_active = False
             if row.expiry_date:
-                row.status = "Active" if str(row.expiry_date) >= today_str else "Expired"
+                is_active = (str(row.expiry_date) >= today_str)
+                row.status = "Active" if is_active else "Expired"
             else:
                 row.status = "Active"
+                is_active = True
+
+            cat = (row.category or "").strip().upper()
+            if "AMC" in cat and is_active:
+                has_active_amc = True
+                if not latest_amc_exp or str(row.expiry_date) > str(latest_amc_exp):
+                    latest_amc_exp = row.expiry_date
+                if row.executive1 and not self.executive:
+                    self.executive = row.executive1
+                if row.executive2 and not self.executive2:
+                    self.executive2 = row.executive2
+
+        if self.get("contracts"):
+            self.amc_status = "YES" if has_active_amc else "NO"
+            self.amc_expiry_date = latest_amc_exp if has_active_amc else None
 
         # Validate child serial numbers
         cleaned_serials = []

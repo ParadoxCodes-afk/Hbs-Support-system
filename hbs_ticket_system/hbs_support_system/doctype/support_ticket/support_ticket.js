@@ -1180,8 +1180,32 @@ function open_autofill_dialog(frm) {
 
             highlight_amc_fields(frm);
             set_party_details_state(frm);
-
             load_call_history(frm);
+
+            frappe.call({
+                method: 'hbs_ticket_system.hbs_support_system.doctype.support_ticket.support_ticket.get_ledger_for_serial',
+                args: { serial_no: row.serial_no },
+                callback: async function(r) {
+                    let res = r.message;
+                    if (res) {
+                        await frm.set_value('amc_status', res.amc_status || 'NO');
+                        await frm.set_value('amc_expiry_date', res.amc_expiry_date || '');
+                        await frm.set_value('cloud_status', res.cloud_status || 'NO');
+                        await frm.set_value('cloud_expiry_date', res.cloud_expiry_date || '');
+                        await frm.set_value('modules_status', res.modules_status || 'NO');
+                        await frm.set_value('modules_expiry_date', res.modules_expiry_date || '');
+                        await frm.set_value('priority', res.amc_status === 'YES' ? 'P1' : 'P2');
+                        if (res.amc_status === 'YES') {
+                            await frm.set_value('amc_executive', res.amc_executive || '');
+                            await frm.set_value('amc_executive2', res.amc_executive2 || '');
+                        } else {
+                            await frm.set_value('amc_executive', '');
+                            await frm.set_value('amc_executive2', '');
+                        }
+                        highlight_amc_fields(frm);
+                    }
+                }
+            });
 
             d.hide();
 

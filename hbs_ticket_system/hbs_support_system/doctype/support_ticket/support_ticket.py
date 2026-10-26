@@ -532,7 +532,42 @@ def search_ledger_contacts(query=""):
             l.name ASC, s.idx ASC, c.idx ASC
         LIMIT 50
     """
-    return frappe.db.sql(sql, (like_q, like_q, like_q, like_q, like_q, like_q, like_q), as_dict=True)
+    results = frappe.db.sql(sql, (like_q, like_q, like_q, like_q, like_q, like_q, like_q), as_dict=True)
+
+    # Dynamically verify active AMC contracts
+    if results and frappe.db.exists("DocType", "support_ticket_ledger_contracts"):
+        unique_ids = list(set(r.get("unique_id") for r in results if r.get("unique_id")))
+        if unique_ids:
+            today_str = frappe.utils.nowdate()
+            contracts = frappe.get_all(
+                "support_ticket_ledger_contracts",
+                filters={"parent": ["in", unique_ids]},
+                fields=["parent", "category", "expiry_date", "executive1", "executive2"]
+            )
+            amc_map = {}
+            for ct in contracts:
+                cat = (ct.category or "").strip().upper()
+                is_active = (not ct.expiry_date) or (str(ct.expiry_date) >= today_str)
+                if "AMC" in cat and is_active:
+                    p = ct.parent
+                    if p not in amc_map or (ct.expiry_date and (not amc_map[p]["expiry_date"] or str(ct.expiry_date) > str(amc_map[p]["expiry_date"]))):
+                        amc_map[p] = {
+                            "expiry_date": ct.expiry_date,
+                            "executive1": ct.executive1,
+                            "executive2": ct.executive2
+                        }
+            for r in results:
+                uid = r.get("unique_id")
+                if uid in amc_map:
+                    r["amc_status"] = "YES"
+                    if amc_map[uid]["expiry_date"]:
+                        r["amc_expiry_date"] = amc_map[uid]["expiry_date"]
+                    if amc_map[uid]["executive1"]:
+                        r["amc_executive"] = amc_map[uid]["executive1"]
+                    if amc_map[uid]["executive2"]:
+                        r["amc_executive2"] = amc_map[uid]["executive2"]
+
+    return results
 
 
 @frappe.whitelist()
