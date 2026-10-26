@@ -464,22 +464,12 @@ def process_import_batch(batch_token, start_idx=0, batch_size=50):
                     else:
                         doc.append("contact_details", new_c)
 
-                # Sync contract row into contracts child table
-                # Preserves history: Only updates if exact product AND same period (re-upload of same file).
-                # New renewals with new dates or different AMC products are appended as separate rows.
+                # Overwrite/update existing record for this product so no duplicate/extra rows are created.
+                # Different products (e.g. second AMC product or Cloud) get their own individual row.
                 if frappe.db.exists("DocType", "support_ticket_ledger_contracts"):
                     matched_contract = None
                     for c_row in (doc.get("contracts") or []):
-                        same_product = (c_row.product == product)
-                        same_period = False
-                        if start_date and c_row.start_date and str(c_row.start_date) == str(start_date):
-                            same_period = True
-                        elif expiry_date and c_row.expiry_date and str(c_row.expiry_date) == str(expiry_date):
-                            same_period = True
-                        elif not start_date and not expiry_date:
-                            same_period = True
-
-                        if same_product and same_period:
+                        if c_row.product == product:
                             matched_contract = c_row
                             break
 
