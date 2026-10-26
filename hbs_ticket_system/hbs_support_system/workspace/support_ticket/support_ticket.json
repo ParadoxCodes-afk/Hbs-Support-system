@@ -1,7 +1,7 @@
 {
  "app": "hbs_ticket_system",
  "charts": [],
- "content": "[{\"id\":\"hdr-1\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Support Ticket Workspace</span>\",\"col\":12}},{\"id\":\"sc-1\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Support Tickets\",\"col\":3}},{\"id\":\"sc-2\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Team Hierarchy\",\"col\":3}},{\"id\":\"sc-3\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Ticket Summary\",\"col\":3}},{\"id\":\"card-1\",\"type\":\"card\",\"data\":{\"card_name\":\"Ticket Operations\",\"col\":6}},{\"id\":\"card-2\",\"type\":\"card\",\"data\":{\"card_name\":\"Masters & Configuration\",\"col\":6}}]",
+ "content": "[{\"id\":\"hdr-1\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Support Ticket Workspace</span>\",\"col\":12}},{\"id\":\"sc-1\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Support Tickets\",\"col\":3}},{\"id\":\"sc-2\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Team Hierarchy\",\"col\":3}},{\"id\":\"sc-3\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Ticket Summary\",\"col\":3}},{\"id\":\"sc-4\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Contract Details\",\"col\":3}},{\"id\":\"card-1\",\"type\":\"card\",\"data\":{\"card_name\":\"Ticket Operations\",\"col\":4}},{\"id\":\"card-3\",\"type\":\"card\",\"data\":{\"card_name\":\"Contract Masters\",\"col\":4}},{\"id\":\"card-2\",\"type\":\"card\",\"data\":{\"card_name\":\"Masters & Configuration\",\"col\":4}}]",
  "creation": "2026-10-18 14:30:00",
  "custom_blocks": [],
  "docstatus": 0,
@@ -18,8 +18,124 @@
   {
    "hidden": 0,
    "is_query_report": 0,
+   "label": "Ticket Operations",
+   "link_count": 4,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Support Tickets",
+   "link_count": 0,
+   "link_to": "support_ticket",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Team Hierarchy",
+   "link_count": 0,
+   "link_to": "support_team_hierarchy",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "User Ticket Summary",
+   "link_count": 0,
+   "link_to": "hbs_support_ticket",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Support Settings",
+   "link_count": 0,
+   "link_to": "Hbs Support Settings",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Contract Masters",
+   "link_count": 5,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Contract Products",
+   "link_count": 0,
+   "link_to": "support_contract_product",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Contract Categories",
+   "link_count": 0,
+   "link_to": "support_contract_category",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Customer Ledger & Contracts",
+   "link_count": 0,
+   "link_to": "support_ticket_ledger",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Contract Details Report",
+   "link_count": 0,
+   "link_to": "HBS Contract Details Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "HBS AMC Report",
+   "link_count": 0,
+   "link_to": "HBS AMC Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
    "label": "Masters & Configuration",
-   "link_count": 8,
+   "link_count": 7,
    "link_type": "DocType",
    "onboard": 0,
    "type": "Card Break"
@@ -100,72 +216,9 @@
    "link_type": "DocType",
    "onboard": 0,
    "type": "Link"
-  },
-  {
-   "dependencies": "",
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Support Ticket Ledger",
-   "link_count": 0,
-   "link_to": "support_ticket_ledger",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Ticket Operations",
-   "link_count": 4,
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Card Break"
-  },
-  {
-   "dependencies": "",
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Support Tickets",
-   "link_count": 0,
-   "link_to": "support_ticket",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "dependencies": "",
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Team Hierarchy",
-   "link_count": 0,
-   "link_to": "support_team_hierarchy",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "dependencies": "",
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "User Ticket Summary",
-   "link_count": 0,
-   "link_to": "hbs_support_ticket",
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Support Settings",
-   "link_count": 0,
-   "link_to": "Hbs Support Settings",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
   }
  ],
- "modified": "2026-10-23 23:10:47.771900",
+ "modified": "2026-10-26 22:49:28.695299",
  "modified_by": "Administrator",
  "module": "HBS Support System",
  "name": "Support Ticket",
@@ -197,6 +250,14 @@
    "label": "Ticket Summary",
    "link_to": "hbs_support_ticket",
    "report_ref_doctype": "support_ticket",
+   "type": "Report"
+  },
+  {
+   "color": "Orange",
+   "doc_view": "",
+   "label": "Contract Details",
+   "link_to": "HBS Contract Details Report",
+   "report_ref_doctype": "support_ticket_ledger",
    "type": "Report"
   }
  ],
