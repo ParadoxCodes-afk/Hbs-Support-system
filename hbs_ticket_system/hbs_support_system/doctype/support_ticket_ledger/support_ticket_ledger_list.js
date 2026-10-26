@@ -23,9 +23,6 @@ frappe.listview_settings['support_ticket_ledger'] = {
         listview.page.add_inner_button(__('📋 Contract Details Report'), function() {
             frappe.set_route('query-report', 'HBS Contract Details Report');
         });
-        listview.page.add_inner_button(__('📊 HBS AMC Report'), function() {
-            frappe.set_route('query-report', 'HBS AMC Report');
-        });
 
         frappe.call({
             method: 'hbs_ticket_system.hbs_support_system.doctype.support_ticket.support_ticket.get_support_user_settings',

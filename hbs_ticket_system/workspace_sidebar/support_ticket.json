@@ -125,18 +125,6 @@
    "type": "Link"
   },
   {
-   "child": 1,
-   "collapsible": 1,
-   "icon": "bar-chart",
-   "indent": 0,
-   "keep_closed": 0,
-   "label": "HBS AMC Report",
-   "link_to": "HBS AMC Report",
-   "link_type": "Report",
-   "show_arrow": 0,
-   "type": "Link"
-  },
-  {
    "child": 0,
    "collapsible": 1,
    "icon": "settings",
@@ -220,7 +208,7 @@
    "type": "Link"
   }
  ],
- "modified": "2026-10-26 22:49:28.880305",
+ "modified": "2026-10-26 22:55:00.578509",
  "modified_by": "Administrator",
  "module": "HBS Support System",
  "name": "Support Ticket",
