@@ -89,15 +89,24 @@ def get_or_create_contract_product(raw_type):
         raw = "AMC"
 
     clean_upper = raw.upper()
-    if "AMC" in clean_upper:
+    if clean_upper in ("AMC", "TALLY AMC", "ANNUAL MAINTENANCE CONTRACT"):
         category = "AMC"
         product_name = "Annual Maintenance Contract"
+    elif "AMC" in clean_upper:
+        category = "AMC"
+        product_name = raw
+    elif clean_upper in ("CLOUD", "TALLY ON CLOUD", "CLOUD RENEWAL"):
+        category = "Cloud"
+        product_name = "Tally on Cloud"
     elif "CLOUD" in clean_upper:
         category = "Cloud"
-        product_name = "Tally on Cloud" if clean_upper in ("CLOUD", "TALLY ON CLOUD", "CLOUD RENEWAL") else raw
+        product_name = raw
+    elif clean_upper in ("MODULE", "MODULES", "CUSTOM MODULE"):
+        category = "Module"
+        product_name = "Custom Module"
     elif "MODUL" in clean_upper:
         category = "Module"
-        product_name = "Custom Module" if clean_upper in ("MODULE", "MODULES", "CUSTOM MODULE") else raw
+        product_name = raw
     else:
         category = "Other"
         product_name = raw
@@ -456,10 +465,21 @@ def process_import_batch(batch_token, start_idx=0, batch_size=50):
                         doc.append("contact_details", new_c)
 
                 # Sync contract row into contracts child table
+                # Preserves history: Only updates if exact product AND same period (re-upload of same file).
+                # New renewals with new dates or different AMC products are appended as separate rows.
                 if frappe.db.exists("DocType", "support_ticket_ledger_contracts"):
                     matched_contract = None
                     for c_row in (doc.get("contracts") or []):
-                        if c_row.product == product or (category and c_row.category == category):
+                        same_product = (c_row.product == product)
+                        same_period = False
+                        if start_date and c_row.start_date and str(c_row.start_date) == str(start_date):
+                            same_period = True
+                        elif expiry_date and c_row.expiry_date and str(c_row.expiry_date) == str(expiry_date):
+                            same_period = True
+                        elif not start_date and not expiry_date:
+                            same_period = True
+
+                        if same_product and same_period:
                             matched_contract = c_row
                             break
 
