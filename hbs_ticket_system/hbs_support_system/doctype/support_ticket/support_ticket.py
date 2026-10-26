@@ -96,6 +96,7 @@ def get_ledger_for_serial(serial_no):
     cloud_active = False
     modules_active = False
     latest_amc_exp = None
+    latest_expired_amc_exp = None
     latest_cloud_exp = None
     latest_mod_exp = None
     c_exec1 = None
@@ -111,6 +112,9 @@ def get_ledger_for_serial(serial_no):
                 latest_amc_exp = c.expiry_date
                 c_exec1 = c.executive1 or c_exec1
                 c_exec2 = c.executive2 or c_exec2
+        elif "AMC" in cat:
+            if not latest_expired_amc_exp or str(c.expiry_date) > str(latest_expired_amc_exp):
+                latest_expired_amc_exp = c.expiry_date
         elif "CLOUD" in cat and is_active:
             cloud_active = True
             if not latest_cloud_exp or c.expiry_date > latest_cloud_exp:
@@ -122,7 +126,7 @@ def get_ledger_for_serial(serial_no):
 
     if contracts:
         ledger["amc_status"] = "YES" if amc_active else "NO"
-        ledger["amc_expiry_date"] = latest_amc_exp
+        ledger["amc_expiry_date"] = latest_amc_exp if amc_active else latest_expired_amc_exp
         if c_exec1: ledger["amc_executive"] = c_exec1
         if c_exec2: ledger["amc_executive2"] = c_exec2
 
@@ -240,6 +244,8 @@ class support_ticket(Document):
                 self.amc_executive2 = ledger.get("amc_executive2")
             else:
                 self.amc_status = ledger.get("amc_status") or "NO"
+                if ledger.get("amc_expiry_date"):
+                    self.amc_expiry_date = ledger.get("amc_expiry_date")
                 self.amc_executive = None
                 self.amc_executive2 = None
 
@@ -545,16 +551,22 @@ def search_ledger_contacts(query=""):
                 fields=["parent", "category", "expiry_date", "executive1", "executive2"]
             )
             amc_map = {}
+            expired_amc_map = {}
             for ct in contracts:
                 cat = (ct.category or "").strip().upper()
                 is_active = (not ct.expiry_date) or (str(ct.expiry_date) >= today_str)
+                p = ct.parent
                 if "AMC" in cat and is_active:
-                    p = ct.parent
                     if p not in amc_map or (ct.expiry_date and (not amc_map[p]["expiry_date"] or str(ct.expiry_date) > str(amc_map[p]["expiry_date"]))):
                         amc_map[p] = {
                             "expiry_date": ct.expiry_date,
                             "executive1": ct.executive1,
                             "executive2": ct.executive2
+                        }
+                elif "AMC" in cat:
+                    if p not in expired_amc_map or (ct.expiry_date and (not expired_amc_map[p]["expiry_date"] or str(ct.expiry_date) > str(expired_amc_map[p]["expiry_date"]))):
+                        expired_amc_map[p] = {
+                            "expiry_date": ct.expiry_date
                         }
             for r in results:
                 uid = r.get("unique_id")
@@ -566,6 +578,10 @@ def search_ledger_contacts(query=""):
                         r["amc_executive"] = amc_map[uid]["executive1"]
                     if amc_map[uid]["executive2"]:
                         r["amc_executive2"] = amc_map[uid]["executive2"]
+                elif uid in expired_amc_map:
+                    r["amc_status"] = "NO"
+                    if expired_amc_map[uid]["expiry_date"]:
+                        r["amc_expiry_date"] = expired_amc_map[uid]["expiry_date"]
 
     return results
 

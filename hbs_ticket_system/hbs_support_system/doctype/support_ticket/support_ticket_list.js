@@ -138,20 +138,22 @@ frappe.listview_settings['support_ticket'] = {
                     let doc = listview.data.find(d => d.name === name);
 
                     // AMC Active = GREEN (#16a34a), AMC Expired = RED (#dc2626)
-                    if (doc && doc.amc_status === 'YES') {
-                        const is_expired = Boolean(
-                            doc.amc_expiry_date &&
-                            frappe.datetime.get_diff(doc.amc_expiry_date, frappe.datetime.nowdate()) < 0
-                        );
-                        const rowColor = is_expired ? '#dc2626' : '#16a34a';
+                    if (doc) {
+                        const has_expiry = Boolean(doc.amc_expiry_date);
+                        const is_expired = has_expiry && frappe.datetime.get_diff(doc.amc_expiry_date, frappe.datetime.nowdate()) < 0;
+                        const is_active_amc = (doc.amc_status === 'YES') && (!has_expiry || !is_expired);
 
-                        row.find('.level-left, .level-right, a, span:not(.pending-time-pill)').each(function() {
-                            this.style.setProperty(
-                                'color',
-                                rowColor,
-                                'important'
-                            );
-                        });
+                        if (is_expired || is_active_amc) {
+                            const rowColor = is_expired ? '#dc2626' : '#16a34a';
+
+                            row.find('.level-left, .level-right, a, span:not(.pending-time-pill)').each(function() {
+                                this.style.setProperty(
+                                    'color',
+                                    rowColor,
+                                    'important'
+                                );
+                            });
+                        }
                     }
                 });
 

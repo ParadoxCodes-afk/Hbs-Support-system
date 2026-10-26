@@ -62,6 +62,7 @@ class support_ticket_ledger(Document):
         today_str = frappe.utils.nowdate()
         has_active_amc = False
         latest_amc_exp = None
+        latest_expired_amc_exp = None
         for row in self.get("contracts") or []:
             if row.product and not row.category:
                 row.category = frappe.db.get_value("support_contract_product", row.product, "category") or "Other"
@@ -95,10 +96,13 @@ class support_ticket_ledger(Document):
                     self.executive = row.executive1
                 if row.executive2 and not self.executive2:
                     self.executive2 = row.executive2
+            elif "AMC" in cat:
+                if not latest_expired_amc_exp or str(row.expiry_date) > str(latest_expired_amc_exp):
+                    latest_expired_amc_exp = row.expiry_date
 
         if self.get("contracts"):
             self.amc_status = "YES" if has_active_amc else "NO"
-            self.amc_expiry_date = latest_amc_exp if has_active_amc else None
+            self.amc_expiry_date = latest_amc_exp if has_active_amc else latest_expired_amc_exp
 
         # Validate child serial numbers
         cleaned_serials = []

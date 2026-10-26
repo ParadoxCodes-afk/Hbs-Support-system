@@ -862,10 +862,12 @@ function open_executive_selection_dialog(frm) {
 // ==========================================================
 function highlight_amc_fields(frm) {
     const is_amc = frm.doc && frm.doc.amc_status === 'YES';
+    const has_expiry = Boolean(frm.doc && frm.doc.amc_expiry_date);
+    const is_expired = has_expiry && frappe.datetime.get_diff(frm.doc.amc_expiry_date, frappe.datetime.nowdate()) < 0;
     const fields = ['amc_status', 'amc_expiry_date', 'amc_executive', 'amc_executive2'];
     const expiry_field = frm.get_field('amc_expiry_date');
 
-    if (is_amc && frm.doc.amc_expiry_date) {
+    if ((is_amc || is_expired) && frm.doc.amc_expiry_date) {
         const diff = frappe.datetime.get_diff(frm.doc.amc_expiry_date, frappe.datetime.nowdate());
         let bg = '#dcfce7';
         let border = '1.5px solid #16a34a';
@@ -955,7 +957,7 @@ function highlight_amc_fields(frm) {
         }
     }
 
-    frm.toggle_display('amc_expiry_date', Boolean(is_amc || (frm.doc && frm.doc.amc_status && frm.doc.amc_status !== 'NO')));
+    frm.toggle_display('amc_expiry_date', Boolean(is_amc || is_expired || (frm.doc && frm.doc.amc_status && frm.doc.amc_status !== 'NO')));
     frm.toggle_display('amc_executive', Boolean(is_amc));
     frm.toggle_display('amc_executive2', Boolean(is_amc));
 }
@@ -1115,9 +1117,12 @@ function open_autofill_dialog(frm) {
         `;
 
         current_results.forEach((row, idx) => {
-            const amcBadge = row.amc_status === 'YES'
+            const is_expired_amc = row.amc_expiry_date && frappe.datetime.get_diff(row.amc_expiry_date, frappe.datetime.nowdate()) < 0;
+            const amcBadge = row.amc_status === 'YES' && !is_expired_amc
                 ? `<span class="indicator-pill green" style="font-size: 11px;">YES</span>`
-                : `<span class="indicator-pill gray" style="font-size: 11px;">NO</span>`;
+                : (is_expired_amc
+                    ? `<span class="indicator-pill red" style="font-size: 11px; background: #fee2e2; color: #dc2626; font-weight: 600;">EXPIRED</span>`
+                    : `<span class="indicator-pill gray" style="font-size: 11px;">NO</span>`);
 
             const contactDisplay = row.contact_name
                 ? `<b>${esc(row.contact_name)}</b>`
