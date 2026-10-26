@@ -180,6 +180,12 @@ def check_import_permission():
 
 
 @frappe.whitelist()
+def start_ledger_import(file_url):
+    """Alias for prepare_import for backwards-compatibility."""
+    return prepare_import(file_url)
+
+
+@frappe.whitelist()
 def prepare_import(file_url):
     """Uploads/locates file, extracts rows, caches them in Frappe cache, and returns summary preview."""
     check_import_permission()
