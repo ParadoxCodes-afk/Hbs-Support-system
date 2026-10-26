@@ -6,9 +6,8 @@ frappe.query_reports["HBS Contract Details Report"] = {
         {
             fieldname: "category",
             label: __("Contract Type / Category"),
-            fieldtype: "Select",
-            options: ["All", "AMC", "Cloud", "Module", "Other"],
-            default: "All"
+            fieldtype: "Link",
+            options: "support_contract_category"
         },
         {
             fieldname: "status",

@@ -111,7 +111,14 @@ def get_or_create_contract_product(raw_type):
         category = "Other"
         product_name = raw
 
-    # Ensure product exists in DB so Link validation passes
+    # Ensure category and product exist in DB so Link validation passes
+    if not frappe.db.exists("support_contract_category", category):
+        c_doc = frappe.get_doc({
+            "doctype": "support_contract_category",
+            "category_name": category
+        })
+        c_doc.insert(ignore_permissions=True)
+
     if not frappe.db.exists("support_contract_product", product_name):
         p_doc = frappe.get_doc({
             "doctype": "support_contract_product",
