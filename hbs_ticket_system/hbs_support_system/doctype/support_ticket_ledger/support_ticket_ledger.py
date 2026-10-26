@@ -88,7 +88,7 @@ class support_ticket_ledger(Document):
             cat = (row.category or "").strip().upper()
             if "AMC" in cat and is_active:
                 has_active_amc = True
-                if not latest_amc_exp or str(row.expiry_date) > str(latest_amc_exp):
+                if row.expiry_date and (not latest_amc_exp or str(row.expiry_date) > str(latest_amc_exp)):
                     latest_amc_exp = row.expiry_date
                 if row.visits and not self.visits:
                     self.visits = row.visits
@@ -97,7 +97,7 @@ class support_ticket_ledger(Document):
                 if row.executive2 and not self.executive2:
                     self.executive2 = row.executive2
             elif "AMC" in cat:
-                if not latest_expired_amc_exp or str(row.expiry_date) > str(latest_expired_amc_exp):
+                if row.expiry_date and (not latest_expired_amc_exp or str(row.expiry_date) > str(latest_expired_amc_exp)):
                     latest_expired_amc_exp = row.expiry_date
 
         if self.get("contracts"):
