@@ -566,11 +566,13 @@ frappe.ui.form.on('support_ticket', {
 
     // SETUP
     setup(frm) {
-        const userQuery =
+        const allUserQuery =
+            'hbs_ticket_system.hbs_support_system.doctype.support_ticket.support_ticket.get_all_users';
+        const supportUserQuery =
             'hbs_ticket_system.hbs_support_system.doctype.support_ticket.support_ticket.get_active_users';
 
-        frm.set_query('executive', () => ({ query: userQuery }));
-        frm.set_query('executive2', () => ({ query: userQuery }));
+        frm.set_query('executive', () => ({ query: allUserQuery }));
+        frm.set_query('executive2', () => ({ query: supportUserQuery }));
     },
 
     // AMC STATUS

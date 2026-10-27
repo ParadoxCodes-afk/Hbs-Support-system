@@ -639,6 +639,28 @@ def create_ledger_entry(serial_no, party_name, contact_name, contact_phone, emai
 
 
 @frappe.whitelist()
+def get_all_users(doctype, txt, searchfield, start, page_len, filters):
+    """Return all active system users (for Executive 1, including Sales, Support, etc.)."""
+    start = frappe.utils.cint(start or 0)
+    page_len = frappe.utils.cint(page_len or 20)
+    return frappe.db.sql("""
+        SELECT DISTINCT u.name, u.full_name
+        FROM `tabUser` u
+        WHERE u.enabled = 1
+          AND u.user_type = 'System User'
+          AND u.name NOT IN ('Guest')
+          AND (u.name LIKE %s OR u.full_name LIKE %s)
+        ORDER BY u.full_name ASC
+        LIMIT %s, %s
+    """, (
+        f"%{txt}%",
+        f"%{txt}%",
+        start,
+        page_len
+    ))
+
+
+@frappe.whitelist()
 def get_active_users(doctype, txt, searchfield, start, page_len, filters):
     start = frappe.utils.cint(start or 0)
     page_len = frappe.utils.cint(page_len or 20)
