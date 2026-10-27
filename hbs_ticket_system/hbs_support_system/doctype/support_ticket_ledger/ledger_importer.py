@@ -653,33 +653,28 @@ def process_update_master_batch(batch_token, start_idx=0, batch_size=50):
                 doc.email = email
                 is_dirty = True
 
-            # Update Contact Person & Phone
+            # Update Contact Person & Phone: overwrite the first line in contact details table
             contact_name = (row.get("Contact Person") or row.get("Contact Name") or row.get("contact_person") or "").strip()
             contact_phone = normalize_phone(row.get("Mobile") or row.get("Phone") or row.get("Contact Phone") or row.get("Mobile / Phone") or "")
 
             if contact_name or contact_phone:
-                contact_found = False
-                for c in doc.contact_details:
-                    if contact_name and (c.contact_name or "").strip().lower() == contact_name.lower():
-                        if contact_phone and c.contact_phone != contact_phone:
-                            c.contact_phone = contact_phone
-                            is_dirty = True
-                        contact_found = True
-                        break
-
-                if not contact_found:
-                    if doc.contact_details and not doc.contact_details[0].contact_name:
-                        doc.contact_details[0].contact_name = contact_name
-                        doc.contact_details[0].contact_phone = contact_phone
-                        doc.contact_details[0].is_primary = 1
+                if doc.contact_details:
+                    # Overwrite the first line directly
+                    first_c = doc.contact_details[0]
+                    if contact_name and first_c.contact_name != contact_name:
+                        first_c.contact_name = contact_name
                         is_dirty = True
-                    else:
-                        doc.append("contact_details", {
-                            "contact_name": contact_name,
-                            "contact_phone": contact_phone,
-                            "is_primary": 1 if not doc.contact_details else 0
-                        })
+                    if contact_phone and first_c.contact_phone != contact_phone:
+                        first_c.contact_phone = contact_phone
                         is_dirty = True
+                    first_c.is_primary = 1
+                else:
+                    doc.append("contact_details", {
+                        "contact_name": contact_name,
+                        "contact_phone": contact_phone,
+                        "is_primary": 1
+                    })
+                    is_dirty = True
 
             # Add any secondary serials to serial_numbers child table
             for s in valid_serials:
