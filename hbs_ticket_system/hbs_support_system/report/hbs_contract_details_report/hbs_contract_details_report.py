@@ -7,6 +7,37 @@ from frappe import _
 from frappe.utils import nowdate, getdate
 
 
+def is_manager_or_admin(user=None):
+    user = user or frappe.session.user
+    if user in ("Administrator",) or "System Manager" in frappe.get_roles(user):
+        return True
+
+    from hbs_ticket_system.hbs_support_system.doctype.support_ticket.support_ticket import is_owner_or_admin
+    if is_owner_or_admin(user):
+        return True
+
+    # Check if user is assigned as Manager in support_team_hierarchy
+    is_mgr = frappe.db.sql("""
+        SELECT 1
+        FROM `tabsupport_team_supervisor` s
+        JOIN `tabsupport_team_hierarchy` h ON h.name = s.parent
+        WHERE h.enabled = 1
+          AND s.user = %s
+          AND (s.role_type = 'Manager' OR s.can_alter_ledger = 1)
+        LIMIT 1
+    """, (user,))
+    return bool(is_mgr)
+
+
+@frappe.whitelist()
+def check_report_manager_permission():
+    user = frappe.session.user
+    return {
+        "is_manager": is_manager_or_admin(user),
+        "user": user
+    }
+
+
 def execute(filters=None):
     filters = filters or {}
     columns = get_columns()
@@ -153,7 +184,12 @@ def get_data(filters):
         conditions.append("c.expiry_date <= %(to_date)s")
         values["to_date"] = filters["to_date"]
 
-    if filters.get("executive"):
+    user = frappe.session.user
+    if not is_manager_or_admin(user):
+        # Standard executives strictly see only contracts where they are assigned
+        conditions.append("(c.executive1 = %(logged_user)s OR c.executive2 = %(logged_user)s OR l.executive = %(logged_user)s OR l.executive2 = %(logged_user)s)")
+        values["logged_user"] = user
+    elif filters.get("executive"):
         conditions.append("(c.executive1 = %(executive)s OR c.executive2 = %(executive)s OR l.executive = %(executive)s OR l.executive2 = %(executive)s)")
         values["executive"] = filters["executive"]
 

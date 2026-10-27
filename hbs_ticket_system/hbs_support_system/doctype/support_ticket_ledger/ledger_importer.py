@@ -555,3 +555,158 @@ def process_import_batch(batch_token, start_idx=0, batch_size=50):
         "is_complete": is_complete,
         "progress_pct": progress_pct
     }
+
+
+@frappe.whitelist()
+def process_update_master_batch(batch_token, start_idx=0, batch_size=50):
+    """Process a chunk of rows to update existing customer Details tab (Party Name, Email, Contact Person, Phone) by Serial No."""
+    check_import_permission()
+    cache_key = f"ledger_import_{batch_token}"
+    cached_data = frappe.cache().get_value(cache_key)
+    if not cached_data:
+        frappe.throw(_("Import session expired or not found. Please upload the file again."))
+
+    rows = json.loads(cached_data)
+    total_rows = len(rows)
+    start_idx = int(start_idx or 0)
+    batch_size = int(batch_size or 50)
+    end_idx = min(start_idx + batch_size, total_rows)
+
+    chunk = rows[start_idx:end_idx]
+
+    updated_count = 0
+    skipped_count = 0
+    skipped_list = []
+    errors = []
+
+    for idx, row in enumerate(chunk, start=start_idx + 1):
+        try:
+            raw_serial = row.get("Serial No") or row.get("Serial_No") or row.get("serial_no") or ""
+            serial_candidates = [s.strip() for s in re.split(r"[,;/]+", str(raw_serial)) if s.strip()]
+            valid_serials = []
+            for s in serial_candidates:
+                if s.endswith(".0"):
+                    s = s[:-2]
+                if s.isdigit() and len(s) == 9:
+                    valid_serials.append(s)
+
+            if not valid_serials:
+                errors.append({
+                    "row": idx,
+                    "serial_no": str(raw_serial) or "Empty",
+                    "party_name": str(row.get("Party Name") or "-"),
+                    "reason": f"Invalid Serial No '{raw_serial}'. Must contain at least one valid 9-digit serial number."
+                })
+                continue
+
+            primary_serial = valid_serials[0]
+
+            # Find existing ledger record
+            existing_name = frappe.db.get_value("support_ticket_ledger", {"serial_no": primary_serial}, "name")
+            if not existing_name:
+                existing_name = frappe.db.get_value("support_ticket_ledger", {"unique_id": primary_serial}, "name")
+            if not existing_name:
+                child_match = frappe.db.sql("""
+                    SELECT parent FROM `tabsupport_ticket_ledger_serials`
+                    WHERE serial_no = %s LIMIT 1
+                """, (primary_serial,))
+                if child_match:
+                    existing_name = child_match[0][0]
+
+            if not existing_name and len(valid_serials) > 1:
+                for alt in valid_serials[1:]:
+                    existing_name = frappe.db.get_value("support_ticket_ledger", {"serial_no": alt}, "name")
+                    if not existing_name:
+                        child_match = frappe.db.sql("""
+                            SELECT parent FROM `tabsupport_ticket_ledger_serials`
+                            WHERE serial_no = %s LIMIT 1
+                        """, (alt,))
+                        if child_match:
+                            existing_name = child_match[0][0]
+                    if existing_name:
+                        break
+
+            # If NOT found in database, strictly SKIP without creating a new record!
+            if not existing_name:
+                skipped_count += 1
+                skipped_list.append({
+                    "row": idx,
+                    "serial_no": primary_serial,
+                    "party_name": str(row.get("Party Name") or row.get("Company Name") or "-"),
+                    "reason": "Serial number not found in database (skipped, no record created)"
+                })
+                continue
+
+            # Record exists -> update Details tab fields
+            doc = frappe.get_doc("support_ticket_ledger", existing_name)
+            is_dirty = False
+
+            # Update Party Name
+            party_name = (row.get("Party Name") or row.get("Company Name") or row.get("Customer Name") or "").strip()
+            if party_name and doc.party_name != party_name:
+                doc.party_name = party_name
+                is_dirty = True
+
+            # Update Email
+            email = (row.get("Email") or row.get("E-mail") or "").strip()
+            if email and doc.email != email:
+                doc.email = email
+                is_dirty = True
+
+            # Update Contact Person & Phone
+            contact_name = (row.get("Contact Person") or row.get("Contact Name") or row.get("contact_person") or "").strip()
+            contact_phone = normalize_phone(row.get("Mobile") or row.get("Phone") or row.get("Contact Phone") or row.get("Mobile / Phone") or "")
+
+            if contact_name or contact_phone:
+                contact_found = False
+                for c in doc.contact_details:
+                    if contact_name and (c.contact_name or "").strip().lower() == contact_name.lower():
+                        if contact_phone and c.contact_phone != contact_phone:
+                            c.contact_phone = contact_phone
+                            is_dirty = True
+                        contact_found = True
+                        break
+
+                if not contact_found:
+                    if doc.contact_details and not doc.contact_details[0].contact_name:
+                        doc.contact_details[0].contact_name = contact_name
+                        doc.contact_details[0].contact_phone = contact_phone
+                        doc.contact_details[0].is_primary = 1
+                        is_dirty = True
+                    else:
+                        doc.append("contact_details", {
+                            "contact_name": contact_name,
+                            "contact_phone": contact_phone,
+                            "is_primary": 1 if not doc.contact_details else 0
+                        })
+                        is_dirty = True
+
+            # Add any secondary serials to serial_numbers child table
+            for s in valid_serials:
+                if not any(cs.serial_no == s for cs in doc.serial_numbers):
+                    doc.append("serial_numbers", {
+                        "serial_no": s,
+                        "is_primary": 1 if s == doc.serial_no else 0
+                    })
+                    is_dirty = True
+
+            if is_dirty:
+                doc.save(ignore_permissions=True)
+            updated_count += 1
+
+        except Exception as e:
+            frappe.log_error(f"Error in Update Master row {idx}: {str(e)}")
+            errors.append({
+                "row": idx,
+                "serial_no": str(row.get("Serial No") or "-"),
+                "party_name": str(row.get("Party Name") or "-"),
+                "reason": str(e)
+            })
+
+    return {
+        "updated": updated_count,
+        "skipped": skipped_count,
+        "skipped_list": skipped_list,
+        "errors": errors,
+        "is_complete": end_idx >= total_rows
+    }

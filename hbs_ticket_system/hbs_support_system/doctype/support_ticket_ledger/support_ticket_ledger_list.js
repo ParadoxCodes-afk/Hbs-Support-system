@@ -29,11 +29,13 @@ frappe.listview_settings['support_ticket_ledger'] = {
             callback: function(r) {
                 const settings = r.message || {};
                 if (settings.can_import_excel || settings.is_owner || settings.is_admin) {
-                    listview.page.add_button(__('Import Excel'), function() {
-                        show_ledger_excel_import_dialog(listview);
-                    }, {
-                        btn_class: 'btn-primary'
-                    });
+                    listview.page.add_inner_button(__('Import Master'), function() {
+                        show_ledger_excel_import_dialog(listview, 'import');
+                    }, __('Import'));
+
+                    listview.page.add_inner_button(__('Update Master'), function() {
+                        show_ledger_excel_import_dialog(listview, 'update');
+                    }, __('Import'));
                 }
             }
         });
@@ -303,36 +305,62 @@ function render_contracts_dialog(ledger_name, contracts, products) {
     });
 }
 
-function show_ledger_excel_import_dialog(listview) {
+function show_ledger_excel_import_dialog(listview, mode) {
+    mode = mode || 'import';
+    const is_update_mode = (mode === 'update');
+    const dialog_title = is_update_mode
+        ? __('🔄 Update Master Details (Excel)')
+        : __('📥 Import Master (Excel)');
+
+    const info_description = is_update_mode
+        ? `
+            <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 12px 16px; margin-bottom: 15px; font-size: 13px; color: #1e3a8a;">
+                <div style="font-weight: 700; color: #1e40af; margin-bottom: 4px;">
+                    🔄 Update Master Details Mode
+                </div>
+                <div>
+                    Matches existing customer records strictly by <b>Serial No</b> and updates the <b>Details tab</b>:
+                    <code style="background: #dbeafe; padding: 2px 5px; border-radius: 4px;">Party / Company Name</code>,
+                    <code style="background: #dbeafe; padding: 2px 5px; border-radius: 4px;">Email</code>,
+                    <code style="background: #dbeafe; padding: 2px 5px; border-radius: 4px;">Contact Person</code>,
+                    <code style="background: #dbeafe; padding: 2px 5px; border-radius: 4px;">Phone Number</code>.
+                </div>
+                <div style="margin-top: 6px; font-weight: 600; color: #b45309;">
+                    ⚠️ Note: Non-existent serial numbers will NOT create new records and will be skipped.
+                </div>
+            </div>
+        `
+        : `
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px 16px; margin-bottom: 15px; font-size: 13px; color: #334155;">
+                <div style="font-weight: 600; color: #0f172a; margin-bottom: 4px;">
+                    📋 Supported Format (.xlsx / .xls)
+                </div>
+                <div>
+                    Matches standard contract reports containing:
+                    <code style="background: #e2e8f0; padding: 2px 5px; border-radius: 4px;">Serial No</code>,
+                    <code style="background: #e2e8f0; padding: 2px 5px; border-radius: 4px;">Party Name</code>,
+                    <code style="background: #e2e8f0; padding: 2px 5px; border-radius: 4px;">Company Name</code>,
+                    <code style="background: #e2e8f0; padding: 2px 5px; border-radius: 4px;">Contact Person</code>,
+                    <code style="background: #e2e8f0; padding: 2px 5px; border-radius: 4px;">Mobile / Phone</code>,
+                    <code style="background: #e2e8f0; padding: 2px 5px; border-radius: 4px;">Type (AMC / Cloud / Module)</code>,
+                    <code style="background: #e2e8f0; padding: 2px 5px; border-radius: 4px;">IP Address</code>,
+                    <code style="background: #e2e8f0; padding: 2px 5px; border-radius: 4px;">Starts From</code>,
+                    <code style="background: #e2e8f0; padding: 2px 5px; border-radius: 4px;">Expiry Date</code>,
+                    <code style="background: #e2e8f0; padding: 2px 5px; border-radius: 4px;">Total Amount</code>,
+                    <code style="background: #e2e8f0; padding: 2px 5px; border-radius: 4px;">Sold By</code>,
+                    <code style="background: #e2e8f0; padding: 2px 5px; border-radius: 4px;">Installed By</code>.
+                </div>
+            </div>
+        `;
+
     let dialog = new frappe.ui.Dialog({
-        title: __('📥 Import Support Ticket Ledger (Excel)'),
+        title: dialog_title,
         size: 'large',
         fields: [
             {
                 fieldname: 'info_html',
                 fieldtype: 'HTML',
-                options: `
-                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px 16px; margin-bottom: 15px; font-size: 13px; color: #334155;">
-                        <div style="font-weight: 600; color: #0f172a; margin-bottom: 4px;">
-                            📋 Supported Format (.xlsx / .xls)
-                        </div>
-                        <div>
-                            Matches standard contract reports containing:
-                            <code style="background: #e2e8f0; padding: 2px 5px; border-radius: 4px;">Serial No</code>,
-                            <code style="background: #e2e8f0; padding: 2px 5px; border-radius: 4px;">Party Name</code>,
-                            <code style="background: #e2e8f0; padding: 2px 5px; border-radius: 4px;">Company Name</code>,
-                            <code style="background: #e2e8f0; padding: 2px 5px; border-radius: 4px;">Contact Person</code>,
-                            <code style="background: #e2e8f0; padding: 2px 5px; border-radius: 4px;">Mobile / Phone</code>,
-                            <code style="background: #e2e8f0; padding: 2px 5px; border-radius: 4px;">Type (AMC / Cloud / Module)</code>,
-                            <code style="background: #e2e8f0; padding: 2px 5px; border-radius: 4px;">IP Address</code>,
-                            <code style="background: #e2e8f0; padding: 2px 5px; border-radius: 4px;">Starts From</code>,
-                            <code style="background: #e2e8f0; padding: 2px 5px; border-radius: 4px;">Expiry Date</code>,
-                            <code style="background: #e2e8f0; padding: 2px 5px; border-radius: 4px;">Total Amount</code>,
-                            <code style="background: #e2e8f0; padding: 2px 5px; border-radius: 4px;">Sold By</code>,
-                            <code style="background: #e2e8f0; padding: 2px 5px; border-radius: 4px;">Installed By</code>.
-                        </div>
-                    </div>
-                `
+                options: info_description
             },
             {
                 fieldname: 'excel_file',
@@ -408,7 +436,7 @@ function show_ledger_excel_import_dialog(listview) {
                 `
             }
         ],
-        primary_action_label: __('Start Import'),
+        primary_action_label: is_update_mode ? __('Start Update') : __('Start Import'),
         primary_action: function() {
             let file_url = dialog.get_value('excel_file');
             if (!file_url) {
@@ -441,8 +469,10 @@ function show_ledger_excel_import_dialog(listview) {
                     run_import_batches(dialog, batch_token, 0, total_rows, 50, {
                         inserted: 0,
                         updated: 0,
+                        skipped: 0,
+                        skipped_list: [],
                         errors: []
-                    }, listview);
+                    }, listview, mode);
                 }
             });
         }
@@ -451,15 +481,20 @@ function show_ledger_excel_import_dialog(listview) {
     dialog.show();
 }
 
-function run_import_batches(dialog, batch_token, start_idx, total_rows, batch_size, accum, listview) {
+function run_import_batches(dialog, batch_token, start_idx, total_rows, batch_size, accum, listview, mode) {
+    mode = mode || 'import';
     let progress_pct = Math.round((start_idx / total_rows) * 100);
     dialog.$wrapper.find('#import-progress-bar').css('width', `${progress_pct}%`);
     dialog.$wrapper.find('#import-progress-percentage').text(`${progress_pct}%`);
     dialog.$wrapper.find('#import-status-text').text(__('Importing rows {0} to {1} of {2}...', [start_idx + 1, Math.min(start_idx + batch_size, total_rows), total_rows]));
     dialog.$wrapper.find('#import-counter-text').text(__('Processed {0} of {1} rows', [start_idx, total_rows]));
 
+    const batch_method = (mode === 'update')
+        ? 'hbs_ticket_system.hbs_support_system.doctype.support_ticket_ledger.ledger_importer.process_update_master_batch'
+        : 'hbs_ticket_system.hbs_support_system.doctype.support_ticket_ledger.ledger_importer.process_import_batch';
+
     frappe.call({
-        method: 'hbs_ticket_system.hbs_support_system.doctype.support_ticket_ledger.ledger_importer.process_import_batch',
+        method: batch_method,
         args: {
             batch_token: batch_token,
             start_idx: start_idx,
@@ -474,20 +509,25 @@ function run_import_batches(dialog, batch_token, start_idx, total_rows, batch_si
             let res = r.message || {};
             accum.inserted += (res.inserted || 0);
             accum.updated += (res.updated || 0);
+            accum.skipped = (accum.skipped || 0) + (res.skipped || 0);
+            if (res.skipped_list && res.skipped_list.length) {
+                accum.skipped_list = (accum.skipped_list || []).concat(res.skipped_list);
+            }
             if (res.errors && res.errors.length) {
                 accum.errors = accum.errors.concat(res.errors);
             }
 
             if (!res.is_complete && start_idx + batch_size < total_rows) {
-                run_import_batches(dialog, batch_token, start_idx + batch_size, total_rows, batch_size, accum, listview);
+                run_import_batches(dialog, batch_token, start_idx + batch_size, total_rows, batch_size, accum, listview, mode);
             } else {
-                finish_import_ui(dialog, total_rows, accum, listview);
+                finish_import_ui(dialog, total_rows, accum, listview, mode);
             }
         }
     });
 }
 
-function finish_import_ui(dialog, total_rows, accum, listview) {
+function finish_import_ui(dialog, total_rows, accum, listview, mode) {
+    mode = mode || 'import';
     dialog.$wrapper.find('#import-progress-bar').css('width', '100%');
     dialog.$wrapper.find('#import-progress-percentage').text('100%');
     dialog.$wrapper.find('#import-status-text').text(__('Import complete!'));
@@ -497,6 +537,14 @@ function finish_import_ui(dialog, total_rows, accum, listview) {
     dialog.$wrapper.find('#res-inserted').text(accum.inserted);
     dialog.$wrapper.find('#res-updated').text(accum.updated);
     dialog.$wrapper.find('#res-errors').text(accum.errors.length);
+
+    if (mode === 'update') {
+        dialog.$wrapper.find('#res-inserted').parent().find('div:first').text('✅ Updated');
+        dialog.$wrapper.find('#res-inserted').text(accum.updated);
+        dialog.$wrapper.find('#res-updated').parent().find('div:first').text('⏭️ Skipped (Not Found)');
+        dialog.$wrapper.find('#res-updated').text(accum.skipped || 0);
+    }
+
     dialog.$wrapper.find('#import-result-container').show();
 
     let errors = accum.errors || [];

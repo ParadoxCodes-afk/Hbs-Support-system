@@ -2,6 +2,22 @@
 // For license information, please see license.txt
 
 frappe.query_reports["HBS Contract Details Report"] = {
+    onload: function(report) {
+        frappe.call({
+            method: "hbs_ticket_system.hbs_support_system.report.hbs_contract_details_report.hbs_contract_details_report.check_report_manager_permission",
+            callback: function(r) {
+                const res = r.message || {};
+                if (!res.is_manager && res.user) {
+                    report.set_filter_value("executive", res.user);
+                    const f_exec = report.get_filter("executive");
+                    if (f_exec) {
+                        f_exec.df.read_only = 1;
+                        f_exec.refresh();
+                    }
+                }
+            }
+        });
+    },
     filters: [
         {
             fieldname: "category",
