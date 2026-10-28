@@ -367,28 +367,42 @@ class support_ticket(Document):
                 ledger.append("serial_numbers", {"serial_no": serial_no})
 
             if c_name or c_phone:
-                existing_contact = None
+                exact_match = False
                 for contact in (ledger.get("contact_details") or []):
-                    if c_name and (contact.contact_name or "").strip().lower() == c_name.lower():
-                        existing_contact = contact
-                        break
-                    elif not c_name and c_phone and (contact.contact_phone or "").strip() == c_phone:
-                        existing_contact = contact
-                        break
+                    existing_name = (contact.contact_name or "").strip()
+                    existing_phone = normalize_phone(contact.contact_phone or getattr(contact, "phone_number", None) or "")
 
-                if existing_contact:
-                    if c_name:
-                        existing_contact.contact_name = c_name
-                    if c_phone:
-                        existing_contact.contact_phone = c_phone
-                else:
-                    ledger.append(
-                        "contact_details",
-                        {
-                            "contact_name": c_name,
-                            "contact_phone": c_phone
-                        }
-                    )
+                    if c_name and c_phone:
+                        if existing_name.lower() == c_name.lower() and existing_phone == c_phone:
+                            exact_match = True
+                            break
+                    elif c_name and not c_phone:
+                        if existing_name.lower() == c_name.lower():
+                            exact_match = True
+                            break
+                    elif c_phone and not c_name:
+                        if existing_phone == c_phone:
+                            exact_match = True
+                            break
+
+                if not exact_match:
+                    if (ledger.get("contact_details") and
+                            len(ledger.contact_details) == 1 and
+                            not (ledger.contact_details[0].contact_name or "").strip() and
+                            not (ledger.contact_details[0].contact_phone or "").strip() and
+                            not getattr(ledger.contact_details[0], "phone_number", None)):
+                        ledger.contact_details[0].contact_name = c_name
+                        ledger.contact_details[0].contact_phone = c_phone
+                        ledger.contact_details[0].phone_number = c_phone
+                    else:
+                        ledger.append(
+                            "contact_details",
+                            {
+                                "contact_name": c_name,
+                                "contact_phone": c_phone,
+                                "phone_number": c_phone
+                            }
+                        )
             ledger.save(ignore_permissions=True)
             if not self.unique_id:
                 self.unique_id = ledger.name
@@ -397,7 +411,8 @@ class support_ticket(Document):
             if c_name or c_phone:
                 contacts.append({
                     "contact_name": c_name,
-                    "contact_phone": c_phone
+                    "contact_phone": c_phone,
+                    "phone_number": c_phone
                 })
 
             ledger = frappe.get_doc({
