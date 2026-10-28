@@ -764,6 +764,12 @@ def get_call_history(serial_no=None, current_ticket=None, unique_id=None):
     if not serial_no and not unique_id:
         return []
 
+    if serial_no and not unique_id:
+        unique_id = frappe.db.get_value("support_ticket_ledger_serials", {"serial_no": serial_no}, "parent")
+        if not unique_id and frappe.db.exists("support_ticket_ledger", serial_no):
+            unique_id = serial_no
+        unique_id = str(unique_id or "").strip()
+
     conds = []
     vals = {}
 
@@ -788,9 +794,11 @@ def get_call_history(serial_no=None, current_ticket=None, unique_id=None):
         SELECT
             name,
             serial_no,
+            party_name,
             call_source,
             call_type,
             executive,
+            executive2,
             status,
             remarks,
             creation
