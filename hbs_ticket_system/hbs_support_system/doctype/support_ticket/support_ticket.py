@@ -266,6 +266,7 @@ class support_ticket(Document):
             self.renewal_tally_version = ""
             self.renewal_tss_expiry_date = None
             self.renewal_partner_name = ""
+            self.renewal_executive = None
             self.renewal_tss_status = ""
             self.renewal_mobile = ""
             self.renewal_email = ""
@@ -278,6 +279,10 @@ class support_ticket(Document):
             self.renewal_tally_version = details.get("tally_version") or ""
             self.renewal_tss_expiry_date = details.get("tss_expiry_date")
             self.renewal_partner_name = details.get("partner_name") or ""
+            exec_val = details.get("executive") or None
+            if exec_val and not frappe.db.exists("User", exec_val):
+                exec_val = None
+            self.renewal_executive = exec_val
             self.renewal_tss_status = details.get("tss_status") or ""
             self.renewal_mobile = details.get("mobile") or ""
             self.renewal_email = details.get("email") or ""
@@ -287,6 +292,7 @@ class support_ticket(Document):
             self.renewal_tally_version = ""
             self.renewal_tss_expiry_date = None
             self.renewal_partner_name = ""
+            self.renewal_executive = None
             self.renewal_tss_status = ""
             self.renewal_mobile = ""
             self.renewal_email = ""
@@ -1033,7 +1039,8 @@ def get_tally_renewal_details(serial_no):
                 cc_mobile, portal_mobile,
                 cc_email, portal_email,
                 account_id,
-                cc_contact, portal_contact
+                cc_contact, portal_contact,
+                crm_ex_1, crm_executive
             FROM `tabHbs Tally Renewal`
             WHERE tss_tally_serial = %s OR tally_serial = %s
             ORDER BY modified DESC
@@ -1052,6 +1059,7 @@ def get_tally_renewal_details(serial_no):
             "tally_version": row.tally_version or row.get("release") or row.product_ver or "",
             "tss_expiry_date": str(expiry) if expiry else None,
             "partner_name": row.portal_partner_name or row.partner_name or "",
+            "executive": row.crm_ex_1 or row.crm_executive or "",
             "tss_status": row.tss_status or "",
             "mobile": row.portal_mobile or row.cc_mobile or "",
             "email": row.account_id or row.portal_email or row.cc_email or ""

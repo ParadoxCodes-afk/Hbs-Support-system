@@ -1923,6 +1923,7 @@ function fetch_tally_renewal_details(frm, show_alert_if_not_found) {
                 frm.set_value('renewal_tally_version', data.tally_version || '');
                 frm.set_value('renewal_tss_expiry_date', data.tss_expiry_date || '');
                 frm.set_value('renewal_partner_name', data.partner_name || '');
+                frm.set_value('renewal_executive', data.executive || '');
                 frm.set_value('renewal_tss_status', data.tss_status || '');
                 frm.set_value('renewal_mobile', data.mobile || '');
                 frm.set_value('renewal_email', data.email || '');
@@ -1946,6 +1947,7 @@ function clear_renewal_fields(frm) {
     frm.set_value('renewal_tally_version', '');
     frm.set_value('renewal_tss_expiry_date', '');
     frm.set_value('renewal_partner_name', '');
+    frm.set_value('renewal_executive', '');
     frm.set_value('renewal_tss_status', '');
     frm.set_value('renewal_mobile', '');
     frm.set_value('renewal_email', '');
