@@ -110,7 +110,7 @@
   },
   {
    "fieldname": "contact_phone",
-   "fieldtype": "Phone",
+   "fieldtype": "Data",
    "label": "Contact Phone",
    "reqd": 1
   },
