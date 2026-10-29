@@ -1,6 +1,7 @@
 {
  "actions": [],
  "allow_bulk_edit": 1,
+ "allow_rename": 1,
  "autoname": "HBS-.DD.MM.YYYY.-.###",
  "creation": "2026-09-25 13:32:11.610651",
  "doctype": "DocType",
@@ -422,7 +423,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-10-26 14:00:00.000000",
+ "modified": "2026-10-29 11:41:24.106408",
  "modified_by": "Administrator",
  "module": "HBS Support System",
  "name": "support_ticket",
@@ -469,6 +470,5 @@
  "sort_field": "list_sort_order",
  "sort_order": "ASC",
  "states": [],
- "title_field": "party_name",
- "allow_rename": 1
+ "title_field": "party_name"
 }

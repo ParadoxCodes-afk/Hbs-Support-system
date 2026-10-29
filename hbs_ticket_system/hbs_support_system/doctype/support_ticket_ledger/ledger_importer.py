@@ -641,11 +641,22 @@ def process_update_master_batch(batch_token, start_idx=0, batch_size=50):
             doc = frappe.get_doc("support_ticket_ledger", existing_name)
             is_dirty = False
 
-            # Update Party Name
-            party_name = (row.get("Party Name") or row.get("Company Name") or row.get("Customer Name") or "").strip()
+            # Update Party Name (Customer / Client)
+            party_name = (row.get("Party Name") or row.get("Customer Name") or "").strip()
             if party_name and doc.party_name != party_name:
                 doc.party_name = party_name
                 is_dirty = True
+
+            # Update Our Company Name (Billing entity)
+            raw_comp = str(row.get("Company Name") or row.get("Our Company Name") or "").strip()
+            if raw_comp:
+                valid_companies = ["HBS Solutions Pvt Ltd", "NewAge InfoCom Pvt Ltd", "HBS Services"]
+                for vc in valid_companies:
+                    if vc.lower() in raw_comp.lower():
+                        if doc.our_company_name != vc:
+                            doc.our_company_name = vc
+                            is_dirty = True
+                        break
 
             # Update Email
             email = (row.get("Email") or row.get("E-mail") or "").strip()

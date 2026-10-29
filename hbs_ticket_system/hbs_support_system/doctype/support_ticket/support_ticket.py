@@ -147,6 +147,14 @@ class support_ticket(Document):
                 frappe.throw("Invalid Serial Number", title="Invalid Serial Number")
             self.serial_no = s
 
+        if self.is_new() and self.serial_no and self.contact_phone:
+            existing = check_open_ticket(self.serial_no, self.contact_phone, self.name)
+            if existing:
+                frappe.throw(
+                    f"An open ticket ({existing.get('name')}) already exists for Serial No {self.serial_no} and Phone {self.contact_phone}. Status: {existing.get('status')}",
+                    title="Open Ticket Already Exists"
+                )
+
     def before_insert(self):
         self.add_creation_followup()
 
@@ -184,38 +192,72 @@ class support_ticket(Document):
     # TIMING & COMPLETION METRICS
     # ============================================================
 
+    def calculate_active_duration_seconds(self, at_time=None):
+        at_time = frappe.utils.get_datetime(at_time or frappe.utils.now_datetime())
+        created = frappe.utils.get_datetime(self.creation or at_time)
+
+        history = self.get("followup_history") or []
+        events = [{"status": "NEW", "time": created}]
+        for row in history:
+            dt = frappe.utils.get_datetime(row.updated_on) if row.updated_on else None
+            if dt and dt >= created:
+                events.append({"status": (row.status or "NEW").upper(), "time": dt})
+
+        events.sort(key=lambda x: x["time"])
+
+        total_active_sec = 0.0
+        current_status = "NEW"
+        last_time = created
+
+        for ev in events[1:]:
+            ev_time = min(ev["time"], at_time)
+            if ev_time > last_time:
+                if current_status not in ("PENDING", "LOST"):
+                    total_active_sec += (ev_time - last_time).total_seconds()
+                last_time = ev_time
+            current_status = ev["status"]
+            if last_time >= at_time:
+                break
+
+        curr_status = (self.status or current_status).upper()
+        if at_time > last_time and curr_status not in ("PENDING", "LOST", "COMPLETED"):
+            total_active_sec += (at_time - last_time).total_seconds()
+
+        return max(0, int(total_active_sec))
+
     def update_timing_metrics(self):
         now = frappe.utils.now_datetime()
+        status_upper = (self.status or "").upper()
 
         # Track first entry into FOLLOWUP status
-        if self.status == "FOLLOWUP" and not self.followup_start_time:
+        if status_upper == "FOLLOWUP" and not self.followup_start_time:
             self.followup_start_time = now
 
+        active_sec = self.calculate_active_duration_seconds(now)
+
         # When status is COMPLETED
-        if self.status == "COMPLETED":
+        if status_upper == "COMPLETED":
             if not self.completed_on:
                 self.completed_on = now
 
-            created = frappe.utils.get_datetime(self.creation) if self.creation else now
-            completed = frappe.utils.get_datetime(self.completed_on)
-
-            # 1. New to Completed
-            total_sec = max(0, (completed - created).total_seconds())
-            self.total_time_taken_mins = round(total_sec / 60.0, 2)
-            self.total_time_taken = format_duration(total_sec)
+            self.total_time_taken_mins = round(active_sec / 60.0, 2)
+            self.total_time_taken = format_duration(active_sec)
             self.pending_time = self.total_time_taken
 
-            # 2. Followup to Completed
+            # Followup to Completed
             if self.followup_start_time:
                 fu_start = frappe.utils.get_datetime(self.followup_start_time)
-                fu_sec = max(0, (completed - fu_start).total_seconds())
+                fu_sec = max(0, (frappe.utils.get_datetime(self.completed_on) - fu_start).total_seconds())
                 self.followup_time_taken_mins = round(fu_sec / 60.0, 2)
                 self.followup_time_taken = format_duration(fu_sec)
+        elif status_upper == "PENDING":
+            dur_str = format_duration(active_sec)
+            self.pending_time = f"{dur_str} (Paused)" if dur_str else "0 min (Paused)"
+        elif status_upper == "LOST":
+            dur_str = format_duration(active_sec)
+            self.pending_time = f"{dur_str} (Stopped)" if dur_str else "0 min (Stopped)"
         else:
-            # Active ticket (not completed): update pending_time snapshot
-            created = frappe.utils.get_datetime(self.creation) if self.creation else now
-            elapsed_sec = max(0, (now - created).total_seconds())
-            self.pending_time = format_duration(elapsed_sec)
+            self.pending_time = format_duration(active_sec)
 
             # If ticket was reopened from completed
             if self.completed_on:
@@ -1048,7 +1090,8 @@ def get_tally_renewal_details(serial_no):
                 cc_email, portal_email,
                 account_id,
                 cc_contact, portal_contact,
-                crm_ex_1, crm_executive
+                crm_ex_1, crm_executive,
+                crm_ref
             FROM `tabHbs Tally Renewal`
             WHERE tss_tally_serial = %s OR tally_serial = %s
             ORDER BY modified DESC
@@ -1070,8 +1113,59 @@ def get_tally_renewal_details(serial_no):
             "executive": row.crm_ex_1 or row.crm_executive or "",
             "tss_status": row.tss_status or "",
             "mobile": row.portal_mobile or row.cc_mobile or "",
-            "email": row.account_id or row.portal_email or row.cc_email or ""
+            "email": row.account_id or row.portal_email or row.cc_email or "",
+            "reference_status": (row.crm_ref or "").strip()
         }
     except Exception:
         frappe.log_error("Failed to fetch tally renewal details", "Support Ticket")
         return None
+
+
+@frappe.whitelist()
+def check_open_ticket(serial_no, contact_phone, current_ticket=None):
+    """Check if an open ticket (NEW, FOLLOWUP, PENDING) already exists with same Serial No and Contact Phone."""
+    serial_no = str(serial_no or "").strip()
+    norm_phone = normalize_phone(contact_phone)
+    if not serial_no or not norm_phone:
+        return None
+
+    conds = [
+        "serial_no = %(serial_no)s",
+        "status IN ('NEW', 'FOLLOWUP', 'PENDING')"
+    ]
+    vals = {"serial_no": serial_no}
+
+    if current_ticket:
+        conds.append("name != %(current_ticket)s")
+        vals["current_ticket"] = current_ticket
+
+    tickets = frappe.db.sql(f"""
+        SELECT name, serial_no, party_name, contact_name, contact_phone, status, executive, executive2, creation
+        FROM `tabsupport_ticket`
+        WHERE {" AND ".join(conds)}
+        ORDER BY creation DESC
+        LIMIT 20
+    """, vals, as_dict=True)
+
+    for t in tickets:
+        if normalize_phone(t.contact_phone) == norm_phone:
+            return t
+
+    return None
+
+
+@frappe.whitelist()
+def get_ticket_active_time(ticket_name):
+    """Return active working seconds and current status for client live timer."""
+    if not ticket_name or not frappe.db.exists("support_ticket", ticket_name):
+        return {"active_seconds": 0, "status": "NEW", "is_paused": False, "formatted": "0 min"}
+    doc = frappe.get_doc("support_ticket", ticket_name)
+    active_sec = doc.calculate_active_duration_seconds()
+    status_upper = (doc.status or "").upper()
+    is_paused = status_upper in ("PENDING", "LOST", "COMPLETED")
+    return {
+        "active_seconds": active_sec,
+        "status": doc.status,
+        "is_paused": is_paused,
+        "formatted": format_duration(active_sec)
+    }

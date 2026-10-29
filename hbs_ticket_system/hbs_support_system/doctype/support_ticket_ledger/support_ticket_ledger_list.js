@@ -320,7 +320,8 @@ function show_ledger_excel_import_dialog(listview, mode) {
                 </div>
                 <div>
                     Matches existing customer records strictly by <b>Serial No</b> and updates the <b>Details tab</b>:
-                    <code style="background: #dbeafe; padding: 2px 5px; border-radius: 4px;">Party / Company Name</code>,
+                    <code style="background: #dbeafe; padding: 2px 5px; border-radius: 4px;">Party Name</code>,
+                    <code style="background: #dbeafe; padding: 2px 5px; border-radius: 4px;">Company Name</code>,
                     <code style="background: #dbeafe; padding: 2px 5px; border-radius: 4px;">Email</code>,
                     <code style="background: #dbeafe; padding: 2px 5px; border-radius: 4px;">Contact Person</code>,
                     <code style="background: #dbeafe; padding: 2px 5px; border-radius: 4px;">Phone Number</code>.

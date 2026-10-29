@@ -585,8 +585,20 @@ frappe.ui.form.on('support_ticket', {
         highlight_amc_fields(frm);
     },
 
+    // STATUS CHANGED
+    status(frm) {
+        setup_live_ticket_timer(frm);
+    },
+
+    // CONTACT PHONE CHANGED (DUPLICATE CHECK)
+    contact_phone(frm) {
+        if (frm._is_autofilling) return;
+        check_and_prompt_duplicate_open_ticket(frm);
+    },
+
     // SERIAL NO CHANGED
     serial_no(frm) {
+        if (frm._is_autofilling) return;
         load_call_history(frm);
 
         if (!frm.doc.serial_no) {
@@ -606,6 +618,7 @@ frappe.ui.form.on('support_ticket', {
             frm.set_value('contact_phone', '');
             highlight_amc_fields(frm);
             clear_renewal_fields(frm);
+            clear_party_warning_banner(frm);
             load_call_history(frm);
         } else {
             const serial = String(frm.doc.serial_no).trim();
@@ -639,7 +652,8 @@ frappe.ui.form.on('support_ticket', {
                     }
                 });
             }
-            fetch_tally_renewal_details(frm, true);
+            fetch_tally_renewal_details(frm, false);
+            check_and_prompt_duplicate_open_ticket(frm);
         }
     },
 
@@ -668,50 +682,23 @@ frappe.ui.form.on('support_ticket', {
             return;
         }
 
-        // DUPLICATE OPEN TICKET CHECK
+        // DUPLICATE OPEN TICKET CHECK (MATCHING SERIAL NO AND CONTACT PHONE)
         if (frm.is_new()) {
-
-            const serial_no = (frm.doc.serial_no || '').trim(); 
-            const call_source = (frm.doc.call_source || '').trim(); 
-            const call_type = (frm.doc.call_type || '').trim(); 
-            // Check duplicates only when all fields are filled 
-            if (serial_no && call_source && call_type) {
-                let tickets = await frappe.db.get_list('support_ticket', {
-                    filters: {
-                        serial_no: frm.doc.serial_no,
-                        call_source: frm.doc.call_source,
-                        call_type: frm.doc.call_type,
-                        status: ['!=', 'COMPLETED']
-                    },
-                    fields: [
-                        'name', 'serial_no', 'call_source', 'call_type', 'status'
-                    ],
-                    order_by: 'creation desc',
-                    limit: 1
+            const serial_no = (frm.doc.serial_no || '').trim();
+            const contact_phone = (frm.doc.contact_phone || '').trim();
+            if (serial_no && contact_phone) {
+                const res = await frappe.call({
+                    method: 'hbs_ticket_system.hbs_support_system.doctype.support_ticket.support_ticket.check_open_ticket',
+                    args: {
+                        serial_no: serial_no,
+                        contact_phone: contact_phone,
+                        current_ticket: frm.doc.name || ''
+                    }
                 });
-
-                if (tickets && tickets.length) {
-                    const ticket = tickets[0];
-
+                const ticket = res.message;
+                if (ticket) {
                     frappe.validated = false;
-
-                    frappe.msgprint({
-                        title: 'Ticket Already Exists',
-                        message:
-                            'An open ticket already exists with the same ' +
-                            'Serial No, Call Source and Call Type.' +
-                            '<br><br><b>Ticket:</b> ' + ticket.name +
-                            '<br><b>Status:</b> ' + (ticket.status || ''),
-                        indicator: 'red',
-                        primary_action: {
-                            label: 'Open Ticket',
-                            action: function () {
-                                frappe.hide_msgprint();
-                                frappe.set_route('Form', 'support_ticket', ticket.name);
-                            }
-                        }
-                    });
-
+                    prompt_duplicate_open_ticket_dialog(ticket);
                     return;
                 }
             }
@@ -1167,27 +1154,34 @@ function open_autofill_dialog(frm) {
             const row = current_results[idx];
             if (!row) return;
 
-            await frm.set_value('serial_no', row.serial_no);
-            await frm.set_value('unique_id', row.unique_id || '');
-            await frm.set_value('party_name', row.party_name || '');
-            await frm.set_value('email', row.email || '');
-            await frm.set_value('amc_status', row.amc_status || 'NO');
-            await frm.set_value('amc_expiry_date', row.amc_expiry_date || '');
-            await frm.set_value('priority', row.amc_status === 'YES' ? 'P1' : 'P2');
-            await frm.set_value('contact_name', row.contact_name || '');
-            await frm.set_value('contact_phone', row.contact_phone || row.phone_number || '');
+            frm._is_autofilling = true;
+            try {
+                await frm.set_value('serial_no', row.serial_no);
+                await frm.set_value('unique_id', row.unique_id || '');
+                await frm.set_value('party_name', row.party_name || '');
+                await frm.set_value('email', row.email || '');
+                await frm.set_value('amc_status', row.amc_status || 'NO');
+                await frm.set_value('amc_expiry_date', row.amc_expiry_date || '');
+                await frm.set_value('priority', row.amc_status === 'YES' ? 'P1' : 'P2');
+                await frm.set_value('contact_name', row.contact_name || '');
+                await frm.set_value('contact_phone', row.contact_phone || row.phone_number || '');
 
-            if (row.amc_status === 'YES') {
-                await frm.set_value('amc_executive', row.amc_executive || '');
-                await frm.set_value('amc_executive2', row.amc_executive2 || '');
-            } else {
-                await frm.set_value('amc_executive', '');
-                await frm.set_value('amc_executive2', '');
+                if (row.amc_status === 'YES') {
+                    await frm.set_value('amc_executive', row.amc_executive || '');
+                    await frm.set_value('amc_executive2', row.amc_executive2 || '');
+                } else {
+                    await frm.set_value('amc_executive', '');
+                    await frm.set_value('amc_executive2', '');
+                }
+            } finally {
+                frm._is_autofilling = false;
             }
 
             highlight_amc_fields(frm);
             set_party_details_state(frm);
             load_call_history(frm);
+            fetch_tally_renewal_details(frm, false);
+            check_and_prompt_duplicate_open_ticket(frm);
 
             frappe.call({
                 method: 'hbs_ticket_system.hbs_support_system.doctype.support_ticket.support_ticket.get_ledger_for_serial',
@@ -1374,19 +1368,26 @@ function open_quick_add_ledger_dialog(frm, parent_dialog, prefill_query) {
                     if (r.exc || !r.message) return;
 
                     const res = r.message;
-                    await frm.set_value('serial_no', res.serial_no);
-                    await frm.set_value('party_name', res.party_name || '');
-                    await frm.set_value('email', res.email || '');
-                    await frm.set_value('amc_status', res.amc_status || 'NO');
-                    await frm.set_value('amc_expiry_date', res.amc_expiry_date || '');
-                    await frm.set_value('priority', res.amc_status === 'YES' ? 'P1' : 'P2');
-                    await frm.set_value('contact_name', res.contact_name || '');
-                    await frm.set_value('contact_phone', res.contact_phone || '');
+                    frm._is_autofilling = true;
+                    try {
+                        await frm.set_value('serial_no', res.serial_no);
+                        await frm.set_value('party_name', res.party_name || '');
+                        await frm.set_value('email', res.email || '');
+                        await frm.set_value('amc_status', res.amc_status || 'NO');
+                        await frm.set_value('amc_expiry_date', res.amc_expiry_date || '');
+                        await frm.set_value('priority', res.amc_status === 'YES' ? 'P1' : 'P2');
+                        await frm.set_value('contact_name', res.contact_name || '');
+                        await frm.set_value('contact_phone', res.contact_phone || '');
+                    } finally {
+                        frm._is_autofilling = false;
+                    }
 
                     highlight_amc_fields(frm);
                     set_party_details_state(frm);
 
                     load_call_history(frm);
+                    fetch_tally_renewal_details(frm, false);
+                    check_and_prompt_duplicate_open_ticket(frm);
 
                     add_d.hide();
                     if (parent_dialog) {
@@ -1428,6 +1429,21 @@ function open_quick_add_ledger_dialog(frm, parent_dialog, prefill_query) {
                         message: __('Auto-filled from HBS Tally Renewal ({0})', [data.party_name || sn]),
                         indicator: 'green'
                     }, 4);
+
+                    const ref_status = (data.reference_status || '').trim().toUpperCase();
+                    if (ref_status && ref_status !== 'ACTIVE') {
+                        frappe.msgprint({
+                            title: __('Account Status Notice'),
+                            indicator: 'orange',
+                            message: __('Customer is currently recorded as an Inactive client ({0}). Please proceed accordingly.', [data.reference_status])
+                        });
+                    }
+                } else {
+                    frappe.msgprint({
+                        title: __('Client Record Notice'),
+                        indicator: 'orange',
+                        message: __('No client record found for this Serial Number in HBS database.')
+                    });
                 }
             }
         });
@@ -1854,7 +1870,10 @@ function setup_live_ticket_timer(frm) {
         return;
     }
 
-    if (frm.doc.status === 'COMPLETED') {
+    const current_status = (frm.doc.status || '').toUpperCase();
+
+    // 1. COMPLETED: Static completed time
+    if (current_status === 'COMPLETED') {
         const completedText = frm.doc.total_time_taken || frm.doc.pending_time || 'Completed';
         frm.page.set_indicator(__('Completed ({0})', [completedText]), 'green');
         if (frm.fields_dict.pending_time && frm.fields_dict.pending_time.$wrapper) {
@@ -1863,18 +1882,29 @@ function setup_live_ticket_timer(frm) {
         return;
     }
 
-    const createdTime = new Date(frm.doc.creation).getTime();
-
-    function tick() {
-        if (!frm.doc || frm.doc.status === 'COMPLETED') {
-            if (window.support_ticket_form_timer) {
-                clearInterval(window.support_ticket_form_timer);
-                window.support_ticket_form_timer = null;
-            }
-            return;
+    // 2. PENDING: Live timer frozen (Paused)
+    if (current_status === 'PENDING') {
+        const pausedText = frm.doc.pending_time || 'Paused';
+        frm.page.set_indicator(__('Pending ({0})', [pausedText]), 'orange');
+        if (frm.fields_dict.pending_time && frm.fields_dict.pending_time.$wrapper) {
+            frm.fields_dict.pending_time.$wrapper.find('input').val(pausedText);
         }
+        return;
+    }
 
-        const elapsedSec = Math.max(0, Math.floor((Date.now() - createdTime) / 1000));
+    // 3. LOST: Live timer stopped (Stopped)
+    if (current_status === 'LOST') {
+        const stoppedText = frm.doc.pending_time || 'Stopped';
+        frm.page.set_indicator(__('Lost ({0})', [stoppedText]), 'gray');
+        if (frm.fields_dict.pending_time && frm.fields_dict.pending_time.$wrapper) {
+            frm.fields_dict.pending_time.$wrapper.find('input').val(stoppedText);
+        }
+        return;
+    }
+
+    // 4. ACTIVE (NEW, FOLLOWUP): Live ticking timer excluding paused periods
+    function format_timer_seconds(elapsedSec) {
+        elapsedSec = Math.max(0, Math.floor(elapsedSec));
         const days = Math.floor(elapsedSec / 86400);
         const hours = Math.floor((elapsedSec % 86400) / 3600);
         const mins = Math.floor((elapsedSec % 3600) / 60);
@@ -1885,20 +1915,203 @@ function setup_live_ticket_timer(frm) {
         if (hours || days) displayParts.push(`${hours}h`);
         displayParts.push(`${mins}m`);
         displayParts.push(`${secs}s`);
-        const timerStr = displayParts.join(' ');
+        return displayParts.join(' ');
+    }
 
-        // Update form indicator badge
-        const indicatorColor = (elapsedSec > 7200) ? 'red' : ((elapsedSec > 3600) ? 'orange' : 'blue');
-        frm.page.set_indicator(__('Pending: {0}', [timerStr]), indicatorColor);
-
-        // Update pending_time field input without marking form dirty
+    function render_tick(sec) {
+        const timerStr = format_timer_seconds(sec);
+        const indicatorColor = (sec > 7200) ? 'red' : ((sec > 3600) ? 'orange' : 'blue');
+        frm.page.set_indicator(__('Active: {0}', [timerStr]), indicatorColor);
         if (frm.fields_dict.pending_time && frm.fields_dict.pending_time.$wrapper) {
             frm.fields_dict.pending_time.$wrapper.find('input').val(timerStr);
         }
     }
 
-    tick();
-    window.support_ticket_form_timer = setInterval(tick, 1000);
+    // Preliminary estimate from doc creation while server call resolves
+    const createdTime = new Date(frm.doc.creation).getTime();
+    let initialSec = Math.max(0, Math.floor((Date.now() - createdTime) / 1000));
+    render_tick(initialSec);
+
+    // Synchronize accurately with server active duration (accounts for paused PENDING intervals)
+    frappe.call({
+        method: 'hbs_ticket_system.hbs_support_system.doctype.support_ticket.support_ticket.get_ticket_active_time',
+        args: { ticket_name: frm.doc.name },
+        callback: function(r) {
+            const res = r.message;
+            if (!res) return;
+            if (res.is_paused) {
+                if (frm.fields_dict.pending_time && frm.fields_dict.pending_time.$wrapper) {
+                    frm.fields_dict.pending_time.$wrapper.find('input').val(res.formatted);
+                }
+                return;
+            }
+
+            const baseSec = res.active_seconds || 0;
+            const fetchTimestamp = Date.now();
+
+            function liveTick() {
+                if (!frm.doc) {
+                    if (window.support_ticket_form_timer) {
+                        clearInterval(window.support_ticket_form_timer);
+                        window.support_ticket_form_timer = null;
+                    }
+                    return;
+                }
+                const st = (frm.doc.status || '').toUpperCase();
+                if (st === 'COMPLETED' || st === 'PENDING' || st === 'LOST') {
+                    if (window.support_ticket_form_timer) {
+                        clearInterval(window.support_ticket_form_timer);
+                        window.support_ticket_form_timer = null;
+                    }
+                    return;
+                }
+                const currentSec = baseSec + Math.max(0, Math.floor((Date.now() - fetchTimestamp) / 1000));
+                render_tick(currentSec);
+            }
+
+            if (window.support_ticket_form_timer) {
+                clearInterval(window.support_ticket_form_timer);
+            }
+            liveTick();
+            window.support_ticket_form_timer = setInterval(liveTick, 1000);
+        }
+    });
+}
+
+
+// ============================================================
+// PARTY WARNING BANNER (ACTIVE STATUS & HBS CLIENT NOTICE)
+// ============================================================
+function show_party_warning_banner(frm, type, custom_msg) {
+    if (!frm.dashboard) return;
+    frm.dashboard.clear_headline();
+
+    if (type === 'NOT_ACTIVE') {
+        const msg = custom_msg || __('Account Status: Customer is currently recorded as Inactive in company records');
+        frm.dashboard.set_headline(
+            `<span style="color: #c2410c; font-weight: 600;"><i class="fa fa-exclamation-triangle"></i> ${frappe.utils.escape_html(msg)}</span>`,
+            'orange'
+        );
+    } else if (type === 'NOT_CLIENT') {
+        const msg = custom_msg || __('Client Notice: Serial number is not registered under HBS client records');
+        frm.dashboard.set_headline(
+            `<span style="color: #dc2626; font-weight: 600;"><i class="fa fa-user-times"></i> ${frappe.utils.escape_html(msg)}</span>`,
+            'red'
+        );
+    }
+}
+
+function clear_party_warning_banner(frm) {
+    if (frm.dashboard) {
+        frm.dashboard.clear_headline();
+    }
+}
+
+
+// ============================================================
+// DUPLICATE OPEN TICKET PREVENTION (SAME SERIAL NO & PHONE)
+// ============================================================
+function prompt_duplicate_open_ticket_dialog(ticket) {
+    if (!ticket) return;
+
+    if (window._open_ticket_duplicate_dialog && window._open_ticket_duplicate_dialog.display) {
+        return;
+    }
+
+    if (frappe.hide_msgprint) {
+        try { frappe.hide_msgprint(true); } catch (e) {}
+    }
+
+    const party = ticket.party_name ? `<br><b>Party:</b> ${frappe.utils.escape_html(ticket.party_name)}` : '';
+    const contact = ticket.contact_name ? `<br><b>Contact:</b> ${frappe.utils.escape_html(ticket.contact_name)}` : '';
+    const phone = ticket.contact_phone ? `<br><b>Phone:</b> ${frappe.utils.escape_html(ticket.contact_phone)}` : '';
+    const exec = ticket.executive ? `<br><b>Executive:</b> ${frappe.utils.escape_html(ticket.executive)}` : '';
+
+    const d = new frappe.ui.Dialog({
+        title: __('Open Ticket Already Exists'),
+        fields: [
+            {
+                fieldtype: 'HTML',
+                fieldname: 'ticket_info',
+                options: `
+                    <div style="font-size: 13px; line-height: 1.6; color: #1f2937;">
+                        <p style="margin-bottom: 12px;">
+                            An open ticket already exists with the same Serial No (<b>${frappe.utils.escape_html(ticket.serial_no)}</b>) and Contact Number (<b>${frappe.utils.escape_html(ticket.contact_phone)}</b>).
+                        </p>
+                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; margin-bottom: 12px;">
+                            <div><b>Ticket:</b> <a href="/app/support_ticket/${encodeURIComponent(ticket.name)}" target="_blank" style="font-weight: bold; color: #2563eb;">${frappe.utils.escape_html(ticket.name)}</a></div>
+                            <div><b>Status:</b> <span class="indicator-pill orange" style="font-size: 11px;">${frappe.utils.escape_html(ticket.status || '')}</span></div>
+                            ${party}
+                            ${contact}
+                            ${phone}
+                            ${exec}
+                        </div>
+                        <p style="color: #64748b; font-size: 12px; margin-bottom: 0;">
+                            Please resolve or update the existing ticket instead of creating a duplicate.
+                        </p>
+                    </div>
+                `
+            }
+        ],
+        primary_action_label: __('Open Ticket'),
+        primary_action: function () {
+            d.hide();
+            window._open_ticket_duplicate_dialog = null;
+            frappe.set_route('Form', 'support_ticket', ticket.name);
+        }
+    });
+
+    d.$wrapper.find('.modal-header').css({
+        'border-bottom': '1px solid #fee2e2',
+        'background-color': '#fef2f2'
+    });
+    d.$wrapper.find('.modal-title').html(
+        `<span style="color: #dc2626; font-weight: 600;"><i class="fa fa-circle" style="font-size: 9px; vertical-align: middle; margin-right: 6px;"></i>${__('Open Ticket Already Exists')}</span>`
+    );
+
+    window._open_ticket_duplicate_dialog = d;
+    d.show();
+}
+
+function check_and_prompt_duplicate_open_ticket(frm) {
+    if (!frm || !frm.is_new() || frm._is_autofilling) return;
+    const serial_no = (frm.doc.serial_no || '').trim();
+    const contact_phone = (frm.doc.contact_phone || '').trim();
+    if (!serial_no || !contact_phone) {
+        frm._last_checked_duplicate_key = null;
+        return;
+    }
+
+    const checkKey = `${serial_no}:::${contact_phone}`;
+    if (frm._last_checked_duplicate_key === checkKey) {
+        return;
+    }
+
+    if (frm._duplicate_check_timer) {
+        clearTimeout(frm._duplicate_check_timer);
+    }
+
+    frm._duplicate_check_timer = setTimeout(() => {
+        if (!frm.doc || !frm.is_new() || frm._is_autofilling) return;
+        const currentSerial = (frm.doc.serial_no || '').trim();
+        const currentPhone = (frm.doc.contact_phone || '').trim();
+        if (!currentSerial || !currentPhone) return;
+
+        frappe.call({
+            method: 'hbs_ticket_system.hbs_support_system.doctype.support_ticket.support_ticket.check_open_ticket',
+            args: {
+                serial_no: currentSerial,
+                contact_phone: currentPhone,
+                current_ticket: frm.doc.name || ''
+            },
+            callback: function(r) {
+                if (r.message) {
+                    frm._last_checked_duplicate_key = `${currentSerial}:::${currentPhone}`;
+                    prompt_duplicate_open_ticket_dialog(r.message);
+                }
+            }
+        });
+    }, 250);
 }
 
 
@@ -1909,6 +2122,7 @@ function fetch_tally_renewal_details(frm, show_alert_if_not_found) {
     const serial = (frm.doc.serial_no || '').trim();
     if (!serial) {
         clear_renewal_fields(frm);
+        clear_party_warning_banner(frm);
         return;
     }
 
@@ -1927,13 +2141,28 @@ function fetch_tally_renewal_details(frm, show_alert_if_not_found) {
                 frm.set_value('renewal_tss_status', data.tss_status || '');
                 frm.set_value('renewal_mobile', data.mobile || '');
                 frm.set_value('renewal_email', data.email || '');
+
+                const ref_status = (data.reference_status || '').trim().toUpperCase();
+                if (ref_status && ref_status !== 'ACTIVE') {
+                    show_party_warning_banner(frm, 'NOT_ACTIVE', `Account Status: Customer is currently recorded as Inactive in company records (${data.reference_status})`);
+                    if (show_alert_if_not_found) {
+                        frappe.msgprint({
+                            title: __('Account Status Notice'),
+                            indicator: 'orange',
+                            message: __('Customer is currently recorded as an Inactive client ({0}). Please proceed accordingly.', [data.reference_status])
+                        });
+                    }
+                } else {
+                    clear_party_warning_banner(frm);
+                }
             } else {
                 clear_renewal_fields(frm);
+                show_party_warning_banner(frm, 'NOT_CLIENT', 'Client Notice: Serial number is not registered under HBS client records');
                 if (show_alert_if_not_found) {
                     frappe.msgprint({
-                        title: __('Renewal Notice'),
+                        title: __('Client Record Notice'),
                         indicator: 'orange',
-                        message: __('This party is not in our database.')
+                        message: __('No client record found for this Serial Number in HBS database.')
                     });
                 }
             }
