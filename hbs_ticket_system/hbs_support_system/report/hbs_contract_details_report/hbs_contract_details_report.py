@@ -186,11 +186,26 @@ def get_data(filters):
 
     user = frappe.session.user
     if not is_manager_or_admin(user):
-        # Standard executives strictly see only contracts where they are assigned
-        conditions.append("(c.executive1 = %(logged_user)s OR c.executive2 = %(logged_user)s OR l.executive = %(logged_user)s OR l.executive2 = %(logged_user)s)")
+        # Standard executives strictly see only contracts where they are assigned.
+        # Check contract row executives first; if contract has no executives specified, fall back to ledger header.
+        conditions.append("""(
+            (COALESCE(c.executive1, '') != '' OR COALESCE(c.executive2, '') != '')
+            AND (c.executive1 = %(logged_user)s OR c.executive2 = %(logged_user)s)
+            OR (
+                COALESCE(c.executive1, '') = '' AND COALESCE(c.executive2, '') = ''
+                AND (l.executive = %(logged_user)s OR l.executive2 = %(logged_user)s)
+            )
+        )""")
         values["logged_user"] = user
     elif filters.get("executive"):
-        conditions.append("(c.executive1 = %(executive)s OR c.executive2 = %(executive)s OR l.executive = %(executive)s OR l.executive2 = %(executive)s)")
+        conditions.append("""(
+            (COALESCE(c.executive1, '') != '' OR COALESCE(c.executive2, '') != '')
+            AND (c.executive1 = %(executive)s OR c.executive2 = %(executive)s)
+            OR (
+                COALESCE(c.executive1, '') = '' AND COALESCE(c.executive2, '') = ''
+                AND (l.executive = %(executive)s OR l.executive2 = %(executive)s)
+            )
+        )""")
         values["executive"] = filters["executive"]
 
     search = (filters.get("search") or "").strip()

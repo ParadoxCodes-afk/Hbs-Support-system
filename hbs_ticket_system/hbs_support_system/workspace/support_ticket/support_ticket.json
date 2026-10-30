@@ -1,7 +1,7 @@
 {
  "app": "hbs_ticket_system",
  "charts": [],
- "content": "[{\"id\":\"hdr-1\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Support Ticket Workspace</span>\",\"col\":12}},{\"id\":\"sc-1\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Support Tickets\",\"col\":3}},{\"id\":\"sc-2\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Team Hierarchy\",\"col\":3}},{\"id\":\"sc-3\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Ticket Summary\",\"col\":3}},{\"id\":\"sc-4\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Contract Details\",\"col\":3}},{\"id\":\"card-1\",\"type\":\"card\",\"data\":{\"card_name\":\"Ticket Operations\",\"col\":4}},{\"id\":\"card-3\",\"type\":\"card\",\"data\":{\"card_name\":\"Contract Masters\",\"col\":4}},{\"id\":\"card-2\",\"type\":\"card\",\"data\":{\"card_name\":\"Masters & Configuration\",\"col\":4}}]",
+ "content": "[{\"id\":\"hdr-1\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Support Ticket Workspace</span>\",\"col\":12}},{\"id\":\"sc-1\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Support Tickets\",\"col\":3}},{\"id\":\"sc-3\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Ticket Summary\",\"col\":3}},{\"id\":\"sc-4\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Contract Details\",\"col\":3}},{\"id\":\"card-1\",\"type\":\"card\",\"data\":{\"card_name\":\"Ticket Operations\",\"col\":4}},{\"id\":\"card-3\",\"type\":\"card\",\"data\":{\"card_name\":\"Contract Masters\",\"col\":4}},{\"id\":\"card-2\",\"type\":\"card\",\"data\":{\"card_name\":\"Masters & Configuration\",\"col\":4}}]",
  "creation": "2026-10-18 14:30:00",
  "custom_blocks": [],
  "docstatus": 0,
@@ -207,7 +207,7 @@
    "type": "Link"
   }
  ],
- "modified": "2026-10-26 22:55:00.208069",
+ "modified": "2026-10-30 10:40:31.793084",
  "modified_by": "Administrator",
  "module": "HBS Support System",
  "name": "Support Ticket",
@@ -224,13 +224,6 @@
    "doc_view": "List",
    "label": "Support Tickets",
    "link_to": "support_ticket",
-   "type": "DocType"
-  },
-  {
-   "color": "Purple",
-   "doc_view": "List",
-   "label": "Team Hierarchy",
-   "link_to": "support_team_hierarchy",
    "type": "DocType"
   },
   {

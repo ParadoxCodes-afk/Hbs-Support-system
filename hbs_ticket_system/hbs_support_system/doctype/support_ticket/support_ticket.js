@@ -2026,6 +2026,7 @@ function prompt_duplicate_open_ticket_dialog(ticket) {
     const contact = ticket.contact_name ? `<br><b>Contact:</b> ${frappe.utils.escape_html(ticket.contact_name)}` : '';
     const phone = ticket.contact_phone ? `<br><b>Phone:</b> ${frappe.utils.escape_html(ticket.contact_phone)}` : '';
     const exec = ticket.executive ? `<br><b>Executive:</b> ${frappe.utils.escape_html(ticket.executive)}` : '';
+    const exec2 = ticket.executive2 ? `<br><b>Executive 2:</b> ${frappe.utils.escape_html(ticket.executive2)}` : '';
 
     const d = new frappe.ui.Dialog({
         title: __('Open Ticket Already Exists'),
@@ -2045,6 +2046,7 @@ function prompt_duplicate_open_ticket_dialog(ticket) {
                             ${contact}
                             ${phone}
                             ${exec}
+                            ${exec2}
                         </div>
                         <p style="color: #64748b; font-size: 12px; margin-bottom: 0;">
                             Please resolve or update the existing ticket instead of creating a duplicate.
