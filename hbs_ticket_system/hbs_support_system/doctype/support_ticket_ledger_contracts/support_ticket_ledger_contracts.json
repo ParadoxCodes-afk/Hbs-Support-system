@@ -9,6 +9,7 @@
  "field_order": [
   "product",
   "category",
+  "company_name",
   "status",
   "period",
   "start_date",
@@ -40,6 +41,14 @@
    "in_list_view": 1,
    "label": "Category",
    "read_only": 1
+  },
+  {
+   "default": "HBS Solutions Pvt Ltd",
+   "fieldname": "company_name",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Company Name",
+   "options": "HBS Solutions Pvt Ltd\nNewAge InfoCom Pvt Ltd\nHBS Services"
   },
   {
    "fieldname": "status",

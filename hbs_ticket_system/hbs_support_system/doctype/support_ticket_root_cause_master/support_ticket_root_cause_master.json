@@ -1,6 +1,7 @@
 {
  "actions": [],
  "allow_bulk_edit": 1,
+ "autoname": "field:description",
  "creation": "2026-10-01 13:14:10.538554",
  "doctype": "DocType",
  "engine": "InnoDB",
@@ -75,6 +76,8 @@
  "sort_field": "creation",
  "sort_order": "DESC",
  "states": [],
+ "search_fields": "description",
+ "show_title_field_in_link": 1,
  "title_field": "description",
  "allow_rename": 1
 }

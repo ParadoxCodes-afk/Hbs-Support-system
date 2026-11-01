@@ -292,9 +292,18 @@ frappe.ui.form.on('support_ticket', {
                         {
                             label: 'Root Cause Status',
                             fieldname: 'root_cause_status',
-                            fieldtype: 'Select',
-                            options: '',
-                            hidden: 1
+                            fieldtype: 'Link',
+                            options: 'support_ticket_root_cause_master',
+                            only_select: 1,
+                            hidden: 1,
+                            get_query: function () {
+                                let callType = dialog.get_value('call_type');
+                                if (callType) {
+                                    return {
+                                        filters: { code: callType }
+                                    };
+                                }
+                            }
                         },
                         {
                             label: 'Followup Date',
@@ -391,6 +400,18 @@ frappe.ui.form.on('support_ticket', {
                             }
                         }
 
+                        let root_cause_desc = values.root_cause_status || '';
+                        if (values.status === 'COMPLETED' && root_cause_desc) {
+                            let rc_res = await frappe.db.get_value(
+                                'support_ticket_root_cause_master',
+                                root_cause_desc,
+                                'description'
+                            );
+                            if (rc_res?.message?.description) {
+                                root_cause_desc = rc_res.message.description;
+                            }
+                        }
+
                         await frm.set_value('status', values.status);
                         await frm.set_value('call_type', values.call_type);
 
@@ -403,7 +424,7 @@ frappe.ui.form.on('support_ticket', {
                                     : values.pending_sub_status
                             );
                         } else if (values.status === 'COMPLETED') {
-                            await frm.set_value('sub_status', values.root_cause_status);
+                            await frm.set_value('sub_status', root_cause_desc);
                             await frm.set_value('sub_sub_status', '');
                         } else {
                             await frm.set_value('sub_status', '');
@@ -426,7 +447,7 @@ frappe.ui.form.on('support_ticket', {
                                     ? ''
                                     : values.pending_sub_status;
                         } else if (values.status === 'COMPLETED') {
-                            row.sub_status = values.root_cause_status;
+                            row.sub_status = root_cause_desc;
                             row.sub_sub_status = '';
                         } else {
                             row.sub_status = '';
@@ -543,6 +564,9 @@ frappe.ui.form.on('support_ticket', {
                 setTimeout(() => {
                     dialog.fields_dict.call_type.$wrapper.find('.btn-open').remove();
                     dialog.fields_dict.status.$wrapper.find('.btn-open').remove();
+                    if (dialog.fields_dict.root_cause_status) {
+                        dialog.fields_dict.root_cause_status.$wrapper.find('.btn-open').remove();
+                    }
                     if (dialog.fields_dict.remarks && dialog.fields_dict.remarks.$wrapper) {
                         dialog.fields_dict.remarks.$wrapper.find('textarea').css({
                             'height': '44px',
@@ -1449,17 +1473,49 @@ function open_quick_add_ledger_dialog(frm, parent_dialog, prefill_query) {
         });
     }
 
+    function update_serial_validation_ui(sn) {
+        sn = (sn || '').trim();
+        const $desc = add_d.fields_dict.serial_no.$wrapper.find('.help-box');
+        const $input = add_d.fields_dict.serial_no.$input;
+
+        if (!sn) {
+            $desc.html(__('Exactly 9 digits required (starts with 7)'));
+            $input.css({ 'border-color': '', 'box-shadow': '' });
+            return false;
+        }
+
+        if (sn.length === 9) {
+            if (is_genuine_tally_serial(sn)) {
+                $desc.html('<span style="color: #16a34a; font-weight: 600;"><i class="fa fa-check-circle"></i> ' + __('Valid Tally Serial') + '</span>');
+                $input.css({ 'border-color': '#22c55e', 'box-shadow': '0 0 0 1px #22c55e' });
+                return true;
+            } else {
+                $desc.html('<span style="color: #dc2626; font-weight: 600;"><i class="fa fa-times-circle"></i> ' + __('Invalid Serial Number') + '</span>');
+                $input.css({ 'border-color': '#ef4444', 'box-shadow': '0 0 0 1px #ef4444' });
+                return false;
+            }
+        } else {
+            $desc.html('<span style="color: #64748b;">' + __('Exactly 9 digits required ({0}/9)', [sn.length]) + '</span>');
+            $input.css({ 'border-color': '', 'box-shadow': '' });
+            return false;
+        }
+    }
+
     if (add_d.fields_dict.serial_no && add_d.fields_dict.serial_no.$input) {
         add_d.fields_dict.serial_no.$input.on('change input', function() {
             const sn = ($(this).val() || '').trim();
-            if (sn.length === 9) {
+            const is_valid = update_serial_validation_ui(sn);
+            if (sn.length === 9 && is_valid) {
                 lookup_and_fill_tally_renewal(sn);
             }
         });
     }
 
-    if (prefill_serial && prefill_serial.length === 9) {
-        lookup_and_fill_tally_renewal(prefill_serial);
+    if (prefill_serial) {
+        update_serial_validation_ui(prefill_serial);
+        if (prefill_serial.length === 9 && is_genuine_tally_serial(prefill_serial)) {
+            lookup_and_fill_tally_renewal(prefill_serial);
+        }
     }
 
     // Lock AMC fields in quick add for non-supervisors
@@ -1482,26 +1538,7 @@ function open_quick_add_ledger_dialog(frm, parent_dialog, prefill_query) {
 // LOAD ROOT CAUSE OPTIONS
 // ==========================================================
 function load_root_causes(dialog) {
-    const callType = dialog.get_value('call_type');
-
-    if (!callType) {
-        dialog.set_df_property('root_cause_status', 'options', '');
-        dialog.set_value('root_cause_status', '');
-        return;
-    }
-
-    frappe.db.get_list('support_ticket_root_cause_master', {
-        filters: { code: callType },
-        fields: ['description'],
-        order_by: 'description asc'
-    }).then(data => {
-        dialog.set_df_property(
-            'root_cause_status',
-            'options',
-            data.map(row => row.description).join('\n')
-        );
-        dialog.set_value('root_cause_status', '');
-    });
+    dialog.set_value('root_cause_status', '');
 }
 
 

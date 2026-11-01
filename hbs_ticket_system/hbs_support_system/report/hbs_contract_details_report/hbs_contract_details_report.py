@@ -58,7 +58,7 @@ def get_columns():
             "label": _("Serial No(s)"),
             "fieldname": "serial_no",
             "fieldtype": "Data",
-            "width": 140,
+            "width": 130,
         },
         {
             "label": _("Party Name"),
@@ -70,14 +70,14 @@ def get_columns():
             "label": _("Type / Category"),
             "fieldname": "category",
             "fieldtype": "Data",
-            "width": 100,
+            "width": 105,
         },
         {
             "label": _("Product"),
             "fieldname": "product",
             "fieldtype": "Link",
             "options": "support_contract_product",
-            "width": 180,
+            "width": 170,
         },
         {
             "label": _("Status / Health"),
@@ -86,40 +86,10 @@ def get_columns():
             "width": 170,
         },
         {
-            "label": _("Start Date"),
-            "fieldname": "start_date",
-            "fieldtype": "Date",
-            "width": 110,
-        },
-        {
             "label": _("Expiry Date"),
             "fieldname": "expiry_date",
             "fieldtype": "Date",
             "width": 115,
-        },
-        {
-            "label": _("Cycle"),
-            "fieldname": "period",
-            "fieldtype": "Data",
-            "width": 95,
-        },
-        {
-            "label": _("Visits"),
-            "fieldname": "visits",
-            "fieldtype": "Data",
-            "width": 80,
-        },
-        {
-            "label": _("Users / Qty"),
-            "fieldname": "qty",
-            "fieldtype": "Float",
-            "width": 90,
-        },
-        {
-            "label": _("Rate"),
-            "fieldname": "rate",
-            "fieldtype": "Currency",
-            "width": 95,
         },
         {
             "label": _("Amount"),
@@ -128,36 +98,10 @@ def get_columns():
             "width": 110,
         },
         {
-            "label": _("IP / License ID"),
-            "fieldname": "ip_address",
+            "label": _("Action"),
+            "fieldname": "action",
             "fieldtype": "Data",
-            "width": 130,
-        },
-        {
-            "label": _("Executive 1"),
-            "fieldname": "executive1",
-            "fieldtype": "Link",
-            "options": "User",
-            "width": 120,
-        },
-        {
-            "label": _("Executive 2"),
-            "fieldname": "executive2",
-            "fieldtype": "Link",
-            "options": "User",
-            "width": 120,
-        },
-        {
-            "label": _("Contact Info"),
-            "fieldname": "contact",
-            "fieldtype": "Data",
-            "width": 180,
-        },
-        {
-            "label": _("Remarks"),
-            "fieldname": "remarks",
-            "fieldtype": "Data",
-            "width": 160,
+            "width": 185,
         },
     ]
 
@@ -229,6 +173,7 @@ def get_data(filters):
             c.name as contract_id,
             c.parent as unique_id,
             c.product,
+            COALESCE(NULLIF(c.company_name, ''), l.our_company_name, 'HBS Solutions Pvt Ltd') as company_name,
             c.category,
             c.period,
             c.start_date,
@@ -243,7 +188,9 @@ def get_data(filters):
             c.executive2,
             c.remarks,
             l.party_name,
-            l.serial_no as primary_serial
+            l.serial_no as primary_serial,
+            l.our_company_name,
+            l.email as customer_email
         FROM
             `tabsupport_ticket_ledger_contracts` c
         JOIN
@@ -389,3 +336,520 @@ def get_data(filters):
     ]
 
     return filtered_data, summary
+
+
+# ==========================================================
+# CONTRACT FOLLOW-UP & QUOTATION DISPATCH
+# ==========================================================
+
+import re
+
+def extract_pi_number_and_prefix(val, default_prefix="HBS/TS"):
+    if not val:
+        return default_prefix, 0, None
+    val_str = str(val).strip()
+
+    if val_str.startswith("HB/") or (default_prefix == "HB" and not val_str.startswith("HBS")):
+        m_hb = re.match(r"^HB(?:/(\d{2}-\d{2}))?/(\d+)$", val_str)
+        if m_hb:
+            return "HB", int(m_hb.group(2)), m_hb.group(1)
+        digits = re.findall(r"\d+", val_str)
+        if digits:
+            return "HB", int(digits[-1]), None
+
+    m = re.match(r"^(.*?/)?(\d+)(/.*)?$", val_str)
+    if m:
+        prefix = (m.group(1) or f"{default_prefix}/").rstrip("/")
+        number = int(m.group(2))
+        suffix = (m.group(3) or "").lstrip("/") or None
+        return prefix, number, suffix
+    digits = re.findall(r"\d+", val_str)
+    if digits:
+        return default_prefix, int(digits[0]), None
+    return default_prefix, 0, None
+
+
+def generate_next_pi_number(quotation_format="HBS Quotation", commit_to_settings=False):
+    is_new_age = (quotation_format == "New Age Quotation")
+    is_hbs_services = (quotation_format == "HBS Services Quotation")
+
+    if is_hbs_services:
+        setting_field = "hbs_services_lead_pi_number"
+        last_gen_field = "last_generated_hbs_services_pi_number"
+        default_prefix = "HB"
+    elif is_new_age:
+        setting_field = "new_age_lead_pi_number"
+        last_gen_field = "last_generated_new_age_pi_number"
+        default_prefix = "NIPL/TS"
+    else:
+        setting_field = "hbs_lead_pi_number"
+        last_gen_field = "last_generated_pi_number"
+        default_prefix = "HBS/TS"
+
+    admin_val = ""
+    last_gen_val = ""
+    try:
+        admin_val = frappe.db.get_single_value("Hbs CRM Settings", setting_field) or ""
+        last_gen_val = frappe.db.get_single_value("Hbs CRM Settings", last_gen_field) or ""
+    except Exception:
+        pass
+
+    prefix, admin_num, suffix = extract_pi_number_and_prefix(admin_val, default_prefix=default_prefix)
+    _, last_gen_num, _ = extract_pi_number_and_prefix(last_gen_val, default_prefix=default_prefix)
+
+    max_lead_num = 0
+    if frappe.db.table_exists("Hbs Crm Lead"):
+        if is_hbs_services:
+            cond_lead = "(`quotation_format` = 'HBS Services Quotation' OR `pi_number` LIKE 'HB/%')"
+        elif is_new_age:
+            cond_lead = "(`quotation_format` = 'New Age Quotation' OR `pi_number` LIKE 'NIPL/%')"
+        else:
+            cond_lead = "((`quotation_format` NOT IN ('New Age Quotation', 'HBS Services Quotation') OR `quotation_format` IS NULL) AND (`pi_number` NOT LIKE 'NIPL/%' AND `pi_number` NOT LIKE 'HB/%'))"
+        lead_rows = frappe.db.sql(f"""
+            SELECT pi_number FROM `tabHbs Crm Lead`
+            WHERE pi_number IS NOT NULL AND pi_number != '' AND {cond_lead}
+            ORDER BY creation DESC LIMIT 50
+        """, as_dict=True)
+        for r in lead_rows:
+            _, num, _ = extract_pi_number_and_prefix(r.pi_number, default_prefix=default_prefix)
+            if num > max_lead_num:
+                max_lead_num = num
+
+    max_fup_num = 0
+    if frappe.db.table_exists("support_contract_followup"):
+        if is_hbs_services:
+            cond_fup = "pi_number LIKE 'HB/%'"
+        elif is_new_age:
+            cond_fup = "pi_number LIKE 'NIPL/%'"
+        else:
+            cond_fup = "pi_number LIKE 'HBS/%'"
+        followup_rows = frappe.db.sql(f"""
+            SELECT pi_number FROM `tabsupport_contract_followup`
+            WHERE pi_number IS NOT NULL AND pi_number != '' AND {cond_fup}
+            ORDER BY creation DESC LIMIT 50
+        """, as_dict=True)
+        for r in followup_rows:
+            _, num, _ = extract_pi_number_and_prefix(r.pi_number, default_prefix=default_prefix)
+            if num > max_fup_num:
+                max_fup_num = num
+
+    next_num = max(admin_num, last_gen_num, max_lead_num, max_fup_num) + 1
+    d = frappe.utils.getdate(frappe.utils.nowdate())
+    fy_start = d.year if d.month >= 4 else (d.year - 1)
+    fy_str = suffix or f"{str(fy_start)[-2:]}-{str(fy_start + 1)[-2:]}"
+    prefix_clean = prefix or default_prefix
+    if is_hbs_services:
+        full_pi_number = f"HB/{fy_str}/{next_num:04d}"
+    else:
+        full_pi_number = f"{prefix_clean}/{next_num}/{fy_str}"
+
+    if commit_to_settings:
+        try:
+            frappe.db.set_single_value("Hbs CRM Settings", last_gen_field, full_pi_number)
+        except Exception:
+            pass
+
+    return full_pi_number
+
+
+def render_contract_quotation_html(unique_id, contract_id, quotation_format="HBS Quotation", pi_number=None):
+    ledger = frappe.get_doc("support_ticket_ledger", unique_id)
+    contract = None
+    for c in ledger.contracts:
+        if c.name == contract_id:
+            contract = c
+            break
+
+    if not contract and ledger.contracts:
+        contract = ledger.contracts[0]
+
+    if not contract:
+        frappe.throw(_("No contract details found for this customer."))
+
+    category = (contract.category or "").strip().upper()
+    if "AMC" in category:
+        item_name = "Annual Maintenance Contract"
+    elif "CLOUD" in category:
+        item_name = "Cloud Hosting Charges"
+    else:
+        item_name = contract.product or "Annual Maintenance Contract"
+
+    qty = float(contract.qty or 1)
+    rate = float(contract.rate or contract.amount or 0)
+    amount = float(contract.amount or (qty * rate))
+
+    serial_str = ledger.serial_no or "-"
+    serials = frappe.get_all("support_ticket_ledger_serials", filters={"parent": unique_id}, pluck="serial_no")
+    if serials:
+        serial_str = ", ".join(serials)
+
+    if not pi_number:
+        pi_number = generate_next_pi_number(quotation_format, commit_to_settings=False)
+
+    if quotation_format == "HBS Services Quotation":
+        template_file = "hbs_services_quotation/hbs_services_quotation.html"
+    elif quotation_format == "New Age Quotation":
+        template_file = "new_age_quotation/new_age_quotation.html"
+    else:
+        template_file = "hbs_quotation/hbs_quotation.html"
+    template_path = f"/home/manish/frappe-bench/apps/hbs_crm/hbs_crm/hbs_crm/print_format/{template_file}"
+
+    with open(template_path, "r", encoding="utf-8") as f:
+        template_str = f.read()
+
+    class ItemObj:
+        def __init__(self, **kwargs):
+            self.__dict__.update(kwargs)
+        def get(self, k, d=None):
+            return self.__dict__.get(k, d)
+
+    class DocObj:
+        def __init__(self, **kwargs):
+            self.__dict__.update(kwargs)
+        def get(self, k, d=None):
+            return self.__dict__.get(k, d)
+
+    doc_obj = DocObj(
+        company_name=ledger.party_name or "CLIENT",
+        address=ledger.address or "",
+        company_gst=ledger.gstin or "",
+        quotation_date=frappe.utils.nowdate(),
+        pi_number=pi_number,
+        creation=frappe.utils.nowdate(),
+        name=unique_id,
+        lead_type="AMC",
+        delivery=None,
+        support=None,
+        validity=None,
+        payment_terms=None,
+        taxes=None,
+        items=[ItemObj(
+            item_name=item_name,
+            hsn="998313",
+            description=f"{item_name} for {contract.product or 'Tally Software'} (Serial: {serial_str}). Renewal Period: {contract.period or '1 Year'}.",
+            qty=qty,
+            rate=rate,
+            amount=amount,
+            discount_amount=0
+        )]
+    )
+
+    html = frappe.render_template(template_str, {"doc": doc_obj})
+    return html, pi_number
+
+
+@frappe.whitelist()
+def get_contract_followup_history(unique_id, contract_id=None):
+    if not unique_id or not frappe.db.exists("support_ticket_ledger", unique_id):
+        return []
+
+    conds = ["parent = %(unique_id)s"]
+    vals = {"unique_id": unique_id}
+
+    if contract_id:
+        conds.append("(contract_id = %(contract_id)s OR IFNULL(contract_id, '') = '')")
+        vals["contract_id"] = contract_id
+
+    where_clause = " AND ".join(conds)
+
+    rows = frappe.db.sql(f"""
+        SELECT
+            name,
+            contract_id,
+            product,
+            activity_type,
+            remarks,
+            next_followup_date,
+            logged_by,
+            logged_on,
+            email_sent,
+            pi_number,
+            quotation_format
+        FROM `tabsupport_contract_followup`
+        WHERE {where_clause}
+        ORDER BY logged_on DESC, creation DESC
+        LIMIT 50
+    """, vals, as_dict=True)
+
+    user_names = {}
+    for r in rows:
+        u = r.logged_by
+        if u and u not in user_names:
+            user_names[u] = frappe.db.get_value("User", u, "full_name") or u
+        r.logged_by_name = user_names.get(u, u or "System")
+        r.logged_on_str = frappe.utils.format_datetime(r.logged_on, "dd-MMM-yyyy hh:mm a") if r.logged_on else ""
+        r.next_followup_date_str = frappe.utils.formatdate(r.next_followup_date, "dd-MMM-yyyy") if r.next_followup_date else ""
+
+    return rows
+
+
+@frappe.whitelist()
+def preview_contract_quotation(unique_id, contract_id, quotation_format="HBS Quotation"):
+    html, pi_number = render_contract_quotation_html(unique_id, contract_id, quotation_format, pi_number=None)
+    return {
+        "html": html,
+        "pi_number": pi_number
+    }
+
+
+@frappe.whitelist()
+def get_contract_email_defaults(unique_id, contract_id=None):
+    if not unique_id or not frappe.db.exists("support_ticket_ledger", unique_id):
+        frappe.throw(_("Customer record not found."))
+
+    ledger = frappe.get_doc("support_ticket_ledger", unique_id)
+    contract = None
+    if contract_id:
+        for c in ledger.contracts:
+            if c.name == contract_id:
+                contract = c
+                break
+
+    crm_settings = frappe.get_single("Hbs CRM Email Settings") if frappe.db.exists("DocType", "Hbs CRM Email Settings") else frappe._dict()
+    sender_name = getattr(crm_settings, "sender_name", None) or "HBS Sales Team"
+    from_email = getattr(crm_settings, "email_id", None) or "tally@hbsmail.in"
+
+    exec_user = (contract.executive1 if contract and contract.executive1 else None) or (ledger.executive if ledger.executive else None) or frappe.session.user
+    exec_doc = frappe.get_doc("User", exec_user) if exec_user and frappe.db.exists("User", exec_user) else None
+    logged_in_user_doc = frappe.get_doc("User", frappe.session.user) if frappe.session.user and frappe.db.exists("User", frappe.session.user) else None
+
+    def get_user_dict(u_doc):
+        if not u_doc:
+            return {"full_name": "Executive", "email": "", "mobile_no": "", "phone": "", "phone_number": "", "designation": ""}
+        m = u_doc.get("mobile_no") or u_doc.get("phone") or u_doc.get("phone_number") or ""
+        return {
+            "full_name": u_doc.get("full_name") or u_doc.get("first_name") or "Executive",
+            "email": u_doc.get("email") or "",
+            "mobile_no": m,
+            "phone": m,
+            "phone_number": m,
+            "designation": u_doc.get("designation") or ""
+        }
+
+    executive_dict = get_user_dict(exec_doc)
+    logged_in_user_dict = get_user_dict(logged_in_user_doc)
+
+    serial_str = ledger.serial_no or ""
+    serials = frappe.get_all("support_ticket_ledger_serials", filters={"parent": unique_id}, pluck="serial_no")
+    if serials:
+        serial_str = ", ".join([str(s) for s in serials if s])
+
+    contact_person = ""
+    contact_phone = ""
+    contact_details = ledger.get("contact_details") or []
+    for ct in contact_details:
+        if getattr(ct, "contact_name", None):
+            contact_person = ct.contact_name
+            contact_phone = ct.contact_phone or getattr(ct, "phone_number", "") or ""
+            break
+
+    doc_context = {
+        "name": unique_id,
+        "company_name": ledger.party_name or "Valued Client",
+        "party_name": ledger.party_name or "Valued Client",
+        "contact_name": contact_person or ledger.party_name or "Valued Client",
+        "cc_acc_name": ledger.party_name or "Valued Client",
+        "portal_acc_name": ledger.party_name or "Valued Client",
+        "cc_contact": contact_person or ledger.party_name or "Valued Client",
+        "portal_contact": contact_person or ledger.party_name or "Valued Client",
+        "contact_phone": contact_phone,
+        "tally_serial": serial_str,
+        "tss_tally_serial": serial_str,
+        "serial_no": serial_str,
+        "product": contract.product if contract else "",
+        "category": contract.category if contract else "AMC",
+        "period": contract.period if contract else "1 Year",
+        "license": contract.product if contract else "TallyPrime",
+        "edition": contract.product if contract else "TallyPrime",
+        "flavour": contract.product if contract else "TallyPrime",
+        "acc_expiry_date": frappe.utils.formatdate(contract.expiry_date, "dd-MMM-yyyy") if (contract and contract.expiry_date) else "N/A",
+        "portal_expiry_date": frappe.utils.formatdate(contract.expiry_date, "dd-MMM-yyyy") if (contract and contract.expiry_date) else "N/A",
+        "expiry_date": frappe.utils.formatdate(contract.expiry_date, "dd-MMM-yyyy") if (contract and contract.expiry_date) else "N/A",
+        "cc_amount": frappe.utils.fmt_money(contract.amount or contract.rate or 0) if contract else "0.00",
+        "final_total": frappe.utils.fmt_money(contract.amount or contract.rate or 0) if contract else "0.00",
+        "amount": frappe.utils.fmt_money(contract.amount or contract.rate or 0) if contract else "0.00",
+        "executive_1": contract.executive1 if contract else "",
+    }
+
+    render_context = {
+        "doc": doc_context,
+        "executive": executive_dict,
+        "logged_in_user": logged_in_user_dict,
+        "frappe": frappe
+    }
+
+    subject_tmpl = None
+    body_tmpl = None
+    if getattr(crm_settings, "contract_email_subject", None) or getattr(crm_settings, "contract_email_body", None):
+        subject_tmpl = getattr(crm_settings, "contract_email_subject", None)
+        body_tmpl = getattr(crm_settings, "contract_email_body", None)
+    elif contract and contract.category in ("AMC", "TSS") and getattr(crm_settings, "renewal_email_subject", None):
+        subject_tmpl = crm_settings.renewal_email_subject
+        body_tmpl = crm_settings.renewal_email_body
+    elif getattr(crm_settings, "email_subject", None):
+        subject_tmpl = crm_settings.email_subject
+        body_tmpl = crm_settings.email_body
+
+    subject = ""
+    message = ""
+    default_subject = f"Quotation for {doc_context.get('category') or 'Contract'} Renewal — {doc_context.get('product') or 'Services'} — {doc_context.get('company_name')}"
+    if subject_tmpl:
+        try:
+            subject = frappe.render_template(subject_tmpl, render_context)
+        except Exception:
+            subject = default_subject
+    else:
+        subject = default_subject
+
+    if body_tmpl:
+        try:
+            message = frappe.render_template(body_tmpl, render_context)
+        except Exception:
+            message = ""
+
+    if not message:
+        message = f"""<p>Dear {doc_context['contact_name']},</p>
+<p>Greetings from HBS Solutions!</p>
+<p>With reference to our discussion regarding the renewal of your <b>{doc_context['product'] or 'Contract Services'}</b>, please find below the renewal details and the attached official quotation:</p>
+<table class="table table-bordered" style="width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px;">
+\t<tbody>
+\t\t<tr>
+\t\t\t<td style="padding: 8px; background: #f8fafc; font-weight: 600; width: 180px;">Customer / Account:</td>
+\t\t\t<td style="padding: 8px;"><b>{doc_context['company_name']}</b></td>
+\t\t</tr>
+\t\t<tr>
+\t\t\t<td style="padding: 8px; background: #f8fafc; font-weight: 600;">Contract / Service:</td>
+\t\t\t<td style="padding: 8px;">{doc_context['product']} ({doc_context['category']})</td>
+\t\t</tr>
+\t\t<tr>
+\t\t\t<td style="padding: 8px; background: #f8fafc; font-weight: 600;">Serial Number(s):</td>
+\t\t\t<td style="padding: 8px; font-family: monospace;">{doc_context['serial_no'] or '-'}</td>
+\t\t</tr>
+\t\t<tr>
+\t\t\t<td style="padding: 8px; background: #f8fafc; font-weight: 600;">Expiry Date:</td>
+\t\t\t<td style="padding: 8px; color: #dc2626; font-weight: 600;">{doc_context['expiry_date'] or '-'}</td>
+\t\t</tr>
+\t\t<tr>
+\t\t\t<td style="padding: 8px; background: #f8fafc; font-weight: 600;">Renewal Amount:</td>
+\t\t\t<td style="padding: 8px; color: #059669; font-size: 15px; font-weight: 700;">₹ {doc_context['amount'] or '0.00'}</td>
+\t\t</tr>
+\t</tbody>
+</table>
+<p>Please find attached your official quotation PDF for your review and approval.</p>
+<p>Do let us know if you require any modifications or have any queries.</p>
+<p>Warm regards,<br>
+<b>{executive_dict['full_name']}</b><br>
+HBS Solutions Pvt Ltd
+</p>"""
+
+    user_email = logged_in_user_dict.get("email") or (frappe.session.user if frappe.session and "@" in str(frappe.session.user) else "")
+    client_email = ledger.email or ""
+
+    comp_name = (contract.get("company_name") if contract else None) or getattr(ledger, "our_company_name", None) or "HBS Solutions Pvt Ltd"
+    if "SERVICES" in comp_name.upper():
+        detected_format = "HBS Services Quotation"
+    elif "NEWAGE" in comp_name.upper():
+        detected_format = "New Age Quotation"
+    else:
+        detected_format = "HBS Quotation"
+
+    return {
+        "sender_name": sender_name,
+        "from_email": from_email,
+        "recipient_email": client_email,
+        "cc_email": user_email,
+        "subject": subject,
+        "message": message,
+        "company_name": comp_name,
+        "quotation_format": detected_format
+    }
+
+
+@frappe.whitelist()
+def save_contract_followup(unique_id, contract_id=None, remarks="", next_followup_date=None, send_email=0, recipient_email=None, quotation_format="HBS Quotation", email_subject=None, email_body=None, activity_type=None, sender_name=None, from_email=None, cc_email=None):
+    if not unique_id or not frappe.db.exists("support_ticket_ledger", unique_id):
+        frappe.throw(_("Customer record not found."))
+
+    send_email = frappe.utils.cint(send_email) == 1
+    raw_remarks = (remarks or "").strip()
+    pi_number = ""
+
+    if send_email:
+        if not recipient_email or not recipient_email.strip():
+            frappe.throw(_("Recipient email is required to send quotation."))
+
+        pi_number = generate_next_pi_number(quotation_format, commit_to_settings=True)
+        html, quote_pi = render_contract_quotation_html(unique_id, contract_id, quotation_format, pi_number=pi_number)
+        pdf_bytes = frappe.utils.pdf.get_pdf(html)
+
+        subject = (email_subject or "").strip() or f"AMC Renewal Quotation - {pi_number}"
+        message = (email_body or "").strip() or f"Dear Client,\n\nPlease find attached your AMC Renewal Quotation ({pi_number}).\n\nRegards,\nHBS Solutions"
+
+        display_name = (sender_name or "").strip()
+        email_addr = (from_email or "").strip()
+        if not display_name or not email_addr:
+            if frappe.db.exists("DocType", "Hbs CRM Email Settings"):
+                crm_settings = frappe.get_single("Hbs CRM Email Settings")
+                if not display_name:
+                    display_name = getattr(crm_settings, "sender_name", None) or "HBS Sales Team"
+                if not email_addr:
+                    email_addr = getattr(crm_settings, "email_id", None) or "tally@hbsmail.in"
+        display_name = display_name or "HBS Sales Team"
+        email_addr = email_addr or "tally@hbsmail.in"
+        sender = f"{display_name} <{email_addr}>"
+
+        cc_list = [e.strip() for e in cc_email.split(",") if e.strip()] if cc_email else []
+
+        fname = f"Quotation_{pi_number.replace('/', '_')}.pdf"
+
+        frappe.sendmail(
+            recipients=[recipient_email.strip()],
+            sender=sender,
+            cc=cc_list if cc_list else None,
+            subject=subject,
+            message=message,
+            attachments=[{
+                "fname": fname,
+                "fcontent": pdf_bytes
+            }],
+            now=True
+        )
+
+        activity_type = activity_type or "Email Sent"
+        if raw_remarks:
+            final_remarks = f"Quotation {pi_number} sent via email to {recipient_email.strip()}. Notes: {raw_remarks}"
+        else:
+            final_remarks = f"Quotation {pi_number} sent via email to {recipient_email.strip()}."
+    else:
+        if not raw_remarks:
+            frappe.throw(_("Discussion remarks are required."))
+        activity_type = activity_type or "Phone Call"
+        final_remarks = raw_remarks
+
+    ledger = frappe.get_doc("support_ticket_ledger", unique_id)
+    contract_product = ""
+    for c in ledger.contracts:
+        if c.name == contract_id:
+            contract_product = c.product
+            break
+
+    row = ledger.append("contract_followups", {})
+    row.contract_id = contract_id or ""
+    row.product = contract_product or ""
+    row.activity_type = activity_type
+    row.remarks = final_remarks
+    row.next_followup_date = next_followup_date or None
+    row.logged_by = frappe.session.user
+    row.logged_on = frappe.utils.now_datetime()
+    row.email_sent = 1 if send_email else 0
+    row.pi_number = pi_number if send_email else ""
+    row.quotation_format = quotation_format if send_email else ""
+
+    ledger.save(ignore_permissions=True)
+
+    return {
+        "success": True,
+        "pi_number": pi_number,
+        "message": _("Follow-up logged successfully.") + (_(f" Quotation {pi_number} sent to {recipient_email}.") if send_email else "")
+    }
+

@@ -164,6 +164,41 @@ class support_ticket_ledger(Document):
 
         settings = get_support_user_settings()
 
+        # Enforce Followup Remarks protection (Only Admin and Owner can modify or delete existing followups)
+        if not self.is_new():
+            if not is_owner_or_admin(user):
+                old_doc = self.get_doc_before_save()
+                if not old_doc and self.name and frappe.db.exists(self.doctype, self.name):
+                    old_doc = frappe.get_doc(self.doctype, self.name)
+
+                if old_doc:
+                    old_fups = {
+                        str(row.name): (str(row.remarks or ""), str(row.next_followup_date or ""), str(row.logged_on or ""))
+                        for row in (old_doc.get("contract_followups") or [])
+                        if row.name
+                    }
+                    new_fup_names = {str(row.name) for row in (self.get("contract_followups") or []) if row.name}
+
+                    deleted_names = set(old_fups.keys()) - new_fup_names
+                    if deleted_names:
+                        frappe.throw(
+                            _("Follow-up remarks cannot be deleted. Only Administrators and Owners have permission to delete follow-up history."),
+                            frappe.PermissionError,
+                            title=_("Action Not Permitted")
+                        )
+
+                    for row in (self.get("contract_followups") or []):
+                        r_name = str(row.name) if row.name else None
+                        if r_name and r_name in old_fups:
+                            old_data = old_fups[r_name]
+                            new_data = (str(row.remarks or ""), str(row.next_followup_date or ""), str(row.logged_on or ""))
+                            if old_data != new_data:
+                                frappe.throw(
+                                    _("Logged follow-up remarks cannot be edited once saved. Only Administrators and Owners have permission to modify follow-up history."),
+                                    frappe.PermissionError,
+                                    title=_("Action Not Permitted")
+                                )
+
         # Enforce Contract alteration security on existing ledgers
         if not self.is_new():
             old_doc = self.get_doc_before_save()
@@ -211,6 +246,7 @@ def update_customer_contracts(ledger_name, contracts_json):
         if not r.get("product"):
             continue
         doc.append("contracts", {
+            "company_name": r.get("company_name") or getattr(doc, "our_company_name", None) or "HBS Solutions Pvt Ltd",
             "product": r.get("product"),
             "category": r.get("category"),
             "period": r.get("period"),

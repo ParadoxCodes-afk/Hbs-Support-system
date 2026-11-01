@@ -32,6 +32,13 @@ function sync_primary_serial(frm) {
 }
 
 frappe.ui.form.on('support_ticket_ledger_contracts', {
+    contracts_add(frm, cdt, cdn) {
+        let row = locals[cdt][cdn];
+        if (!row.company_name) {
+            frappe.model.set_value(cdt, cdn, 'company_name', frm.doc.our_company_name || 'HBS Solutions Pvt Ltd');
+        }
+    },
+
     product(frm, cdt, cdn) {
         let row = locals[cdt][cdn];
         if (row.product) {
@@ -114,7 +121,18 @@ function check_ledger_alter_permissions(frm) {
         method: 'hbs_ticket_system.hbs_support_system.doctype.support_ticket.support_ticket.get_support_user_settings',
         callback: function (r) {
             const settings = r.message || {};
-            const can_alter = Boolean(settings.can_alter_amc || settings.is_owner || settings.is_admin);
+            const is_owner_or_admin = Boolean(settings.is_owner || settings.is_admin || frappe.session.user === 'Administrator');
+            const can_alter = Boolean(settings.can_alter_amc || is_owner_or_admin);
+
+            // Follow-up remarks are locked for everyone except Admin and Owners
+            if (!is_owner_or_admin) {
+                frm.set_df_property('contract_followups', 'read_only', 1);
+                if (frm.fields_dict.contract_followups && frm.fields_dict.contract_followups.grid) {
+                    frm.fields_dict.contract_followups.grid.cannot_add_rows = true;
+                    frm.fields_dict.contract_followups.grid.cannot_delete_rows = true;
+                    frm.fields_dict.contract_followups.grid.refresh();
+                }
+            }
 
             if (!can_alter) {
                 // Lock Contracts tab for non-supervisors

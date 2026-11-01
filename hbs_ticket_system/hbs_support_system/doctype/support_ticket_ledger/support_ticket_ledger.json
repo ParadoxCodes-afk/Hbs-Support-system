@@ -20,6 +20,9 @@
   "contracts_tab",
   "contracts_section",
   "contracts",
+  "followups_tab",
+  "followups_section",
+  "contract_followups",
   "address_tab",
   "address_section",
   "address",
@@ -117,6 +120,22 @@
    "fieldtype": "Table",
    "label": "Contracts",
    "options": "support_ticket_ledger_contracts"
+  },
+  {
+   "fieldname": "followups_tab",
+   "fieldtype": "Tab Break",
+   "label": "Renewal Followups"
+  },
+  {
+   "fieldname": "followups_section",
+   "fieldtype": "Section Break",
+   "label": "Contract Followup History"
+  },
+  {
+   "fieldname": "contract_followups",
+   "fieldtype": "Table",
+   "label": "Contract Follow-ups",
+   "options": "support_contract_followup"
   },
   {
    "fieldname": "address_tab",

@@ -21,7 +21,9 @@ frappe.listview_settings['support_ticket_ledger'] = {
 
     onload: function(listview) {
         listview.page.add_inner_button(__('📋 Contract Details Report'), function() {
-            frappe.set_route('query-report', 'HBS Contract Details Report');
+            frappe.require("report.bundle.js", function() {
+                frappe.set_route('query-report', 'HBS Contract Details Report');
+            });
         });
 
         frappe.call({
@@ -77,6 +79,13 @@ function render_contracts_dialog(ledger_name, contracts, products) {
 
         rows_html += `
             <tr class="contract-row" data-idx="${idx}" style="border-bottom: 1px solid #e2e8f0;">
+                <td style="padding: 8px 6px;">
+                    <select class="form-control input-xs c-company" style="font-size: 11px; height: 28px; width: 130px;">
+                        <option value="HBS Solutions Pvt Ltd" ${(c.company_name === 'HBS Solutions Pvt Ltd' || !c.company_name) ? 'selected' : ''}>HBS Solutions</option>
+                        <option value="NewAge InfoCom Pvt Ltd" ${c.company_name === 'NewAge InfoCom Pvt Ltd' ? 'selected' : ''}>NewAge</option>
+                        <option value="HBS Services" ${c.company_name === 'HBS Services' ? 'selected' : ''}>HBS Services</option>
+                    </select>
+                </td>
                 <td style="padding: 8px 6px;">
                     <select class="form-control input-xs c-product" style="font-size: 12px; height: 28px; width: 140px;">
                         ${p_opts}
@@ -141,6 +150,7 @@ function render_contracts_dialog(ledger_name, contracts, products) {
                         <table class="table table-bordered table-hover" style="margin-bottom: 0; font-size: 12px;">
                             <thead style="background: #f8fafc; font-weight: 600; color: #334155;">
                                 <tr>
+                                    <th>Company</th>
                                     <th>Product</th>
                                     <th>Category</th>
                                     <th>Period</th>
@@ -154,7 +164,7 @@ function render_contracts_dialog(ledger_name, contracts, products) {
                                 </tr>
                             </thead>
                             <tbody id="contracts-table-body">
-                                ${rows_html || '<tr><td colspan="9" class="text-center text-muted" style="padding: 20px;">No contracts found. Click "Add Contract" to create one.</td></tr>'}
+                                ${rows_html || '<tr><td colspan="11" class="text-center text-muted" style="padding: 20px;">No contracts found. Click "Add Contract" to create one.</td></tr>'}
                             </tbody>
                         </table>
                     </div>
@@ -169,6 +179,7 @@ function render_contracts_dialog(ledger_name, contracts, products) {
                 let prod = $r.find('.c-product').val();
                 if (!prod) return;
                 rows.push({
+                    company_name: $r.find('.c-company').val() || 'HBS Solutions Pvt Ltd',
                     product: prod,
                     category: $r.find('.c-category').val() || 'Other',
                     period: $r.find('.c-period').val() || 'YEARLY',
@@ -253,6 +264,13 @@ function render_contracts_dialog(ledger_name, contracts, products) {
 
         let new_row_html = `
             <tr class="contract-row" style="border-bottom: 1px solid #e2e8f0; background: #f0fdf4;">
+                <td style="padding: 8px 6px;">
+                    <select class="form-control input-xs c-company" style="font-size: 11px; height: 28px; width: 130px;">
+                        <option value="HBS Solutions Pvt Ltd" selected>HBS Solutions</option>
+                        <option value="NewAge InfoCom Pvt Ltd">NewAge</option>
+                        <option value="HBS Services">HBS Services</option>
+                    </select>
+                </td>
                 <td style="padding: 8px 6px;">
                     <select class="form-control input-xs c-product" style="font-size: 12px; height: 28px; width: 140px;">
                         <option value="">${__('-- Select Product --')}</option>
