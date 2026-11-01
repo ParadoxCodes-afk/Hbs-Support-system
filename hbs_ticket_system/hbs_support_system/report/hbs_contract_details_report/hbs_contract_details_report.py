@@ -2,6 +2,7 @@
 # Copyright (c) 2026, HBS and contributors
 # For license information, please see license.txt
 
+import os
 import frappe
 from frappe import _
 from frappe.utils import nowdate, getdate
@@ -487,15 +488,46 @@ def render_contract_quotation_html(unique_id, contract_id, quotation_format="HBS
         pi_number = generate_next_pi_number(quotation_format, commit_to_settings=False)
 
     if quotation_format == "HBS Services Quotation":
-        template_file = "hbs_services_quotation/hbs_services_quotation.html"
+        folder = "hbs_services_quotation"
+        html_name = "hbs_services_quotation.html"
     elif quotation_format == "New Age Quotation":
-        template_file = "new_age_quotation/new_age_quotation.html"
+        folder = "new_age_quotation"
+        html_name = "new_age_quotation.html"
     else:
-        template_file = "hbs_quotation/hbs_quotation.html"
-    template_path = f"/home/manish/frappe-bench/apps/hbs_crm/hbs_crm/hbs_crm/print_format/{template_file}"
+        folder = "hbs_quotation"
+        html_name = "hbs_quotation.html"
 
-    with open(template_path, "r", encoding="utf-8") as f:
-        template_str = f.read()
+    template_str = None
+    candidate_paths = [
+        # 1. Bundled inside hbs_ticket_system
+        frappe.get_app_path("hbs_ticket_system", "hbs_support_system", "print_format", folder, html_name),
+        frappe.get_app_path("hbs_ticket_system", "print_format", folder, html_name),
+        # 2. Dynamic app path from hbs_crm
+        frappe.get_app_path("hbs_crm", "hbs_crm", "print_format", folder, html_name),
+        frappe.get_app_path("hbs_crm", "print_format", folder, html_name),
+        # 3. Relative to bench / sites
+        os.path.normpath(os.path.join(frappe.get_site_path(), "..", "..", "apps", "hbs_crm", "hbs_crm", "hbs_crm", "print_format", folder, html_name)),
+        os.path.normpath(os.path.join(frappe.get_site_path(), "..", "apps", "hbs_crm", "hbs_crm", "hbs_crm", "print_format", folder, html_name)),
+        f"/home/manish/frappe-bench/apps/hbs_crm/hbs_crm/hbs_crm/print_format/{folder}/{html_name}",
+    ]
+    for p in candidate_paths:
+        if p and os.path.exists(p):
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    content = f.read()
+                    if content and content.strip():
+                        template_str = content
+                        break
+            except Exception:
+                pass
+
+    if not template_str and frappe.db.exists("Print Format", quotation_format):
+        db_html = frappe.db.get_value("Print Format", quotation_format, "html")
+        if db_html and db_html.strip():
+            template_str = db_html
+
+    if not template_str:
+        frappe.throw(_(f"Quotation template for '{quotation_format}' could not be found."))
 
     class ItemObj:
         def __init__(self, **kwargs):

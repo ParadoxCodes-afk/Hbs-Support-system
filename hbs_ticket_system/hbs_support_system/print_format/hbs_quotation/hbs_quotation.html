@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+    <meta charset="utf-8">
+    <title>HBS Quotation</title>
+
+    <style>
+        .print-format {
+            margin-top: 2mm !important;
+            margin-bottom: 2mm !important;
+            margin-left: 7mm !important;
+            margin-right: 7mm !important;
+            padding: 0mm !important;
+        }
+
+        @page {
+            size: A4 portrait;
+            margin-top: 2mm;
+            margin-bottom: 2mm;
+            margin-left: 7mm;
+            margin-right: 7mm;
+        }
+
+        body {
+            font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
+            font-size: 11px;
+            color: #000;
+            margin: 0;
+            padding: 0;
+            line-height: 1.25;
+        }
+
+        .full-img {
+            width: 100%;
+            display: block;
+        }
+
+        .page-break {
+            page-break-before: always;
+            break-before: page;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            border: 1px solid #000;
+            padding: 4px;
+            font-size: 10px;
+        }
+
+        th {
+            font-weight: bold;
+            text-align: center;
+            background-color: #f2f2f2;
+        }
+
+        .center {
+            text-align: center;
+        }
+
+        .right {
+            text-align: right;
+        }
+
+        .jurisdiction {
+            text-align: center;
+            font-weight: bold;
+            font-size: 10px;
+            margin: 3px 0 2px 0;
+            text-decoration: underline;
+        }
+
+        .client-info-table {
+            width: 100%;
+            border-collapse: collapse !important;
+            margin: 3px 0 5px 0 !important;
+        }
+
+        .client-box-header {
+            text-align: center;
+            font-weight: bold;
+            font-size: 10px;
+            padding: 3px;
+            border: 1px solid #000;
+            letter-spacing: 0.5px;
+        }
+
+        .client-box-body {
+            padding: 4px 8px;
+            text-align: center;
+            font-size: 10px;
+            border: 1px solid #000;
+            border-top: none;
+            vertical-align: top;
+        }
+
+        .proforma-box-body {
+            padding: 4px 8px;
+            font-size: 10px;
+            border: 1px solid #000;
+            border-top: none;
+            vertical-align: top;
+        }
+
+        .box-spacer {
+            width: 8px;
+            min-width: 8px;
+            max-width: 8px;
+            border: none !important;
+            padding: 0 !important;
+        }
+
+        .meta-inner-table {
+            width: 100%;
+            border: none !important;
+            border-collapse: collapse !important;
+            margin: 0 !important;
+        }
+
+        .meta-inner-table td {
+            border: none !important;
+            padding: 1.5px 0 !important;
+            font-size: 10px;
+            vertical-align: middle;
+        }
+
+        .terms-title {
+            margin-top: 5px;
+            margin-bottom: 2px;
+            font-weight: bold;
+            font-size: 10px;
+            text-decoration: underline;
+        }
+
+        .terms-table td {
+            padding: 2px 4px;
+            font-size: 10px;
+        }
+
+        .bottom-section {
+            width: 100%;
+            display: table;
+            margin-top: 5px;
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }
+
+        .bank-col {
+            display: table-cell;
+            width: 50%;
+            font-size: 10px;
+            vertical-align: top;
+            line-height: 1.15;
+        }
+
+        .bank-col table td {
+            padding: 0.5px 0;
+            line-height: 1.15;
+        }
+
+        .qr-col {
+            display: table-cell;
+            width: 14%;
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        .qr-col img {
+            width: 70px;
+            height: 70px;
+            display: inline-block;
+        }
+
+        .sign-col {
+            display: table-cell;
+            width: 36%;
+            text-align: right;
+            vertical-align: top;
+            font-size: 10px;
+        }
+
+        .company-name {
+            font-weight: bold;
+            margin-bottom: 20px;
+            white-space: nowrap;
+        }
+
+        .page-wrapper {
+            position: relative;
+            padding: 0 2px 24mm 2px;
+            box-sizing: border-box;
+            min-height: 285mm;
+        }
+
+        .page-footer {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }
+    </style>
+
+</head>
+
+<body>
+
+
+    <!-- PAGE 1 -->
+    <img src="/assets/hbs_crm/images/first_page.jpg" class="full-img">
+
+    <div class="page-break"></div>
+
+
+    <!-- PAGE 2 -->
+    <img src="/assets/hbs_crm/images/second_page.jpg" class="full-img">
+
+    <div class="page-break"></div>
+
+
+    <!-- PAGE 3 -->
+    <div class="page-wrapper">
+
+        <img src="/assets/hbs_crm/images/Invoice Header Final.jpg" class="full-img">
+
+        <div class="jurisdiction">
+            All Disputes Subject to Delhi Jurisdiction
+        </div>
+
+        {% set ref_date = frappe.utils.getdate(doc.quotation_date or doc.creation or frappe.utils.nowdate()) %}
+        {% set fy_start = ref_date.year if ref_date.month >= 4 else (ref_date.year - 1) %}
+        {% set fy_end = fy_start + 1 %}
+        {% set fy_str = (fy_start | string)[-2:] ~ '-' ~ (fy_end | string)[-2:] %}
+
+        <table class="client-info-table">
+            <tbody>
+                <tr>
+                    <td class="client-box-header" style="width: 63%;">CLIENT</td>
+                    <td class="box-spacer"><div style="width: 8px; height: 1px;"></div></td>
+                    <td class="client-box-header" style="width: 37%;">PROFORMA /QUOTATION</td>
+                </tr>
+                <tr>
+                    <td class="client-box-body">
+                        <div style="font-weight: bold; font-size: 12px;">
+                            {{ (doc.company_name or 'CLIENT').strip() }}
+                        </div>
+                        {% if doc.address %}
+                        <div style="font-size: 11px; margin-top: 3px; line-height: 1.3;">
+                            {{ doc.address.strip().replace('\n', '<br>') }}
+                        </div>
+                        {% endif %}
+                        {% if doc.company_gst and doc.company_gst.strip() %}
+                        <div style="font-size: 11px; margin-top: 3px;">
+                            GST No: - {{ doc.company_gst.strip() }}
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td class="box-spacer"><div style="width: 8px;"></div></td>
+                    <td class="proforma-box-body">
+                        <table class="meta-inner-table">
+                            <tr>
+                                <td style="width: 42px;">No.</td>
+                                <td style="width: 12px; text-align: center;">:</td>
+                                <td style="padding-left: 6px;">
+                                    {% if doc.pi_number %}{% set pi_str = doc.pi_number | string %}{% if 'HBS/' in pi_str %}{{ pi_str }}{% elif 'NIPL/' in pi_str %}{{ pi_str.replace('NIPL/', 'HBS/') }}{% else %}HBS/TS/{{ pi_str }}/{{ fy_str }}{% endif %}{% elif 'HBS/' in (doc.name | string) %}{{ doc.name }}{% else %}HBS/TS/{{ doc.name }}/{{ fy_str }}{% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>DATE</td>
+                                <td style="text-align: center;">:</td>
+                                <td style="padding-left: 6px;">
+                                    {{ frappe.utils.formatdate(doc.quotation_date or frappe.utils.nowdate(), "dd-MMM-yy") }}
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+
+        {% set ns = namespace(has_discount=false, subtotal=0) %}
+        {% for item in doc.items %}
+            {% if item.discount_amount and item.discount_amount > 0 %}
+                {% set ns.has_discount = true %}
+            {% endif %}
+        {% endfor %}
+        {% set has_discount = ns.has_discount %}
+
+        <table>
+
+            <thead>
+
+                <tr>
+
+                    <th style="width:40px;">SNO</th>
+
+                    {% if has_discount %}
+                    <th>DESCRIPTION</th>
+                    {% else %}
+                    <th colspan="2">DESCRIPTION</th>
+                    {% endif %}
+
+                    <th style="width:80px;">HSN</th>
+                    <th style="width:80px;">QTY</th>
+                    <th style="width:80px;">RATE</th>
+
+                    {% if has_discount %}
+                    <th style="width:80px;">DISC</th>
+                    {% endif %}
+
+                    <th style="width:100px;">TOTAL</th>
+
+                </tr>
+
+            </thead>
+
+
+            <tbody>
+
+                {% for item in doc.items %}
+
+                {% set discount = item.discount_amount or 0 %}
+                {% set row_total = (item.qty * item.rate) - discount %}
+                {% set ns.subtotal = ns.subtotal + row_total %}
+                {% set hsn = frappe.db.get_value('Hbs Product', item.item_name, 'hsn') or item.hsn %}
+
+                <tr>
+
+                    <td class="center">{{ loop.index }}</td>
+
+                    {% if has_discount %}
+
+                    <td>
+
+                        <div style="font-weight:bold;">
+                            {% set item_name = frappe.db.get_value('Hbs Product', item.item_name, 'item_name') %}
+                            {{ item_name or item.item_name }}
+                        </div>
+
+                        {% if item.description %}
+                        <div style="font-size:10px; text-align:left;">{{ (item.description or '').strip().replace('\n','<br>') }}</div>
+                        {% endif %}
+
+                    </td>
+
+                    {% else %}
+
+                    <td colspan="2">
+
+                        <div style="font-weight:bold;">
+                            {% set item_name = frappe.db.get_value('Hbs Product', item.item_name, 'item_name') %}
+                            {{ item_name or item.item_name }}
+                        </div>
+
+                        {% if item.description %}
+                        <div style="font-size:10px; text-align:left;">{{ (item.description or '').strip().replace('\n','<br>') }}</div>
+                        {% endif %}
+
+                    </td>
+
+                    {% endif %}
+
+                    <td class="center">{{ hsn or '' }}</td>
+                    <td class="center">{{ item.qty }}</td>
+                    <td class="center">{{ "{:,.2f}".format(item.rate | float) }}</td>
+
+                    {% if has_discount %}
+                    <td class="center">{{ "{:,.2f}".format(discount | float) }}</td>
+                    {% endif %}
+
+                    <td class="center"><b>{{ "{:,.2f}".format(row_total | float) }}</b></td>
+
+                </tr>
+
+                {% endfor %}
+
+            </tbody>
+
+
+            <tfoot>
+
+                <tr>
+                    <td colspan="5"></td>
+                    <td class="center"><b>SUBTOTAL</b></td>
+                    <td class="center">{{ "{:,.2f}".format((doc.total_before_tax or 0) | float) }}</td>
+                </tr>
+
+                {% if doc.additional_discount and doc.additional_discount > 0 %}
+                <tr>
+                    <td colspan="5"></td>
+                    <td class="center"><b>DISCOUNT</b></td>
+                    <td class="center">{{ "{:,.2f}".format((doc.additional_discount or 0) | float) }}</td>
+                </tr>
+                {% endif %}
+
+                <tr>
+                    <td colspan="5"></td>
+                    <td class="center"><b>TAX</b></td>
+                    <td class="center">{{ "{:,.2f}".format((doc.total_tax or 0) | float) }}</td>
+                </tr>
+
+                {% set raw_total = (doc.total_before_tax or 0) - (doc.additional_discount or 0) + (doc.total_tax or 0) %}
+                {% set final_total_rounded = (raw_total + 0.5) | int %}
+                {% set round_off = final_total_rounded - raw_total %}
+                {% if round_off | abs > 0.009 %}
+                <tr>
+                    <td colspan="5"></td>
+                    <td class="center"><b>ROUND OFF</b></td>
+                    <td class="center">{{ "{:,.2f}".format(round_off | float) }}</td>
+                </tr>
+                {% endif %}
+
+                <tr>
+                    <td colspan="5"></td>
+                    <td class="center"><b>TOTAL</b></td>
+                    <td class="center"><b>{{ "{:,.2f}".format(final_total_rounded | float) }}</b></td>
+                </tr>
+
+                <tr>
+                    <td colspan="7" style="font-style:italic">
+                        Amount in Words :
+                        {{ frappe.utils.money_in_words(final_total_rounded) }}
+                    </td>
+                </tr>
+
+            </tfoot>
+
+        </table>
+
+
+        <div class="terms-title">Terms and Conditions :</div>
+
+        <table class="terms-table">
+            {% if doc.lead_type == "AMC" %}
+            <tr>
+                <td style="width:30px;">1</td>
+                <td style="width:140px;"><b>Payment Terms</b></td>
+                <td>{{ doc.payment_terms or '100% Advance with signing of the agreement' }}</td>
+            </tr>
+            <tr>
+                <td>2</td>
+                <td><b>Validity</b></td>
+                <td>{{ doc.validity or 'One Year from signing of the Agreement' }}</td>
+            </tr>
+            <tr>
+                <td>3</td>
+                <td><b>Scope of Work</b></td>
+                <td>{{ doc.delivery or 'For Tally Related Queries only.' }}</td>
+            </tr>
+            <tr>
+                <td>4</td>
+                <td><b>Site Visits</b></td>
+                <td>{{ doc.support or 'On site visits will be restricted to 7 visits. Extra visits will be charged as applicable. Each visit restricted to max. of 2 Hrs.' }}</td>
+            </tr>
+            <tr>
+                <td>5</td>
+                <td><b>Performa Invoice</b></td>
+                <td>{{ doc.taxes or 'This is a performa Invoice. Actual Invoice will be delivered to you later.' }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td style="width:30px;">1</td>
+                <td style="width:140px;"><b>Payment Terms</b></td>
+                <td>{{ doc.payment_terms or '100% advance along with confirm order.' }}</td>
+            </tr>
+            <tr>
+                <td>2</td>
+                <td><b>Delivery</b></td>
+                <td>{{ doc.delivery or '2-3 working days.' }}</td>
+            </tr>
+            <tr>
+                <td>3</td>
+                <td><b>Support</b></td>
+                <td>{{ doc.support or '3 Months Telephonic Support from invoice date.' }}</td>
+            </tr>
+            <tr>
+                <td>4</td>
+                <td><b>Taxes</b></td>
+                <td>{{ doc.taxes or 'All Inclusive' }}</td>
+            </tr>
+            <tr>
+                <td>5</td>
+                <td><b>Validity</b></td>
+                <td>{{ doc.validity or 'ONE WEEK' }}</td>
+            </tr>
+            {% endif %}
+        </table>
+
+
+        <div class="bottom-section">
+
+            <div class="bank-col">
+                <div style="font-weight: bold; margin-bottom: 2px;">Company's Bank Details :</div>
+                <table style="width: 100%; border-collapse: collapse; border: none;">
+                    <tr>
+                        <td style="border: none; padding: 1px 0; width: 85px;">A/c Holder</td>
+                        <td style="border: none; padding: 1px 0; width: 10px;">:</td>
+                        <td style="border: none; padding: 1px 0;"><b>HBS SOLUTIONS PVT LTD</b></td>
+                    </tr>
+                    <tr>
+                        <td style="border: none; padding: 1px 0;">Bank Name</td>
+                        <td style="border: none; padding: 1px 0;">:</td>
+                        <td style="border: none; padding: 1px 0;">HDFC BANK</td>
+                    </tr>
+                    <tr>
+                        <td style="border: none; padding: 1px 0;">A/c No.</td>
+                        <td style="border: none; padding: 1px 0;">:</td>
+                        <td style="border: none; padding: 1px 0;">07117630000061</td>
+                    </tr>
+                    <tr>
+                        <td style="border: none; padding: 1px 0;">Branch / IFSC</td>
+                        <td style="border: none; padding: 1px 0;">:</td>
+                        <td style="border: none; padding: 1px 0;">PUSHPANJALI ENCL &amp; HDFC0000711</td>
+                    </tr>
+                </table>
+            </div>
+
+
+            <div class="qr-col">
+                <img src="/assets/hbs_crm/images/cloud_hbs_qr.jpeg">
+            </div>
+
+
+            <div class="sign-col">
+
+                <div class="company-name">
+                    For HBS SOLUTIONS PVT. LTD.
+                </div>
+
+                <div>
+                    Authorized Signatory
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <div class="page-footer">
+            <img src="/assets/hbs_crm/images/Invoice Footer Final.jpg" class="full-img">
+        </div>
+
+    </div>
+
+</body>
+
+</html>
