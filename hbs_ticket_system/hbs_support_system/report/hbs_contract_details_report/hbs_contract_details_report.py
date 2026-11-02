@@ -377,7 +377,7 @@ def generate_next_pi_number(quotation_format="HBS Quotation", commit_to_settings
     if is_hbs_services:
         setting_field = "hbs_services_lead_pi_number"
         last_gen_field = "last_generated_hbs_services_pi_number"
-        default_prefix = "HB"
+        default_prefix = "HBSS"
     elif is_new_age:
         setting_field = "new_age_lead_pi_number"
         last_gen_field = "last_generated_new_age_pi_number"
@@ -401,11 +401,11 @@ def generate_next_pi_number(quotation_format="HBS Quotation", commit_to_settings
     max_lead_num = 0
     if frappe.db.table_exists("Hbs Crm Lead"):
         if is_hbs_services:
-            cond_lead = "(`quotation_format` = 'HBS Services Quotation' OR `pi_number` LIKE 'HB/%')"
+            cond_lead = "(`quotation_format` = 'HBS Services Quotation' OR `pi_number` LIKE 'HBSS/%' OR `pi_number` LIKE 'HB/%')"
         elif is_new_age:
             cond_lead = "(`quotation_format` = 'New Age Quotation' OR `pi_number` LIKE 'NIPL/%')"
         else:
-            cond_lead = "((`quotation_format` NOT IN ('New Age Quotation', 'HBS Services Quotation') OR `quotation_format` IS NULL) AND (`pi_number` NOT LIKE 'NIPL/%' AND `pi_number` NOT LIKE 'HB/%'))"
+            cond_lead = "((`quotation_format` NOT IN ('New Age Quotation', 'HBS Services Quotation') OR `quotation_format` IS NULL) AND (`pi_number` NOT LIKE 'NIPL/%' AND `pi_number` NOT LIKE 'HBSS/%' AND `pi_number` NOT LIKE 'HB/%'))"
         lead_rows = frappe.db.sql(f"""
             SELECT pi_number FROM `tabHbs Crm Lead`
             WHERE pi_number IS NOT NULL AND pi_number != '' AND {cond_lead}
@@ -419,7 +419,7 @@ def generate_next_pi_number(quotation_format="HBS Quotation", commit_to_settings
     max_fup_num = 0
     if frappe.db.table_exists("support_contract_followup"):
         if is_hbs_services:
-            cond_fup = "pi_number LIKE 'HB/%'"
+            cond_fup = "(`pi_number` LIKE 'HBSS/%' OR `pi_number` LIKE 'HB/%')"
         elif is_new_age:
             cond_fup = "pi_number LIKE 'NIPL/%'"
         else:
@@ -439,10 +439,7 @@ def generate_next_pi_number(quotation_format="HBS Quotation", commit_to_settings
     fy_start = d.year if d.month >= 4 else (d.year - 1)
     fy_str = suffix or f"{str(fy_start)[-2:]}-{str(fy_start + 1)[-2:]}"
     prefix_clean = prefix or default_prefix
-    if is_hbs_services:
-        full_pi_number = f"HB/{fy_str}/{next_num:04d}"
-    else:
-        full_pi_number = f"{prefix_clean}/{next_num}/{fy_str}"
+    full_pi_number = f"{prefix_clean}/{next_num}/{fy_str}"
 
     if commit_to_settings:
         try:
@@ -453,7 +450,18 @@ def generate_next_pi_number(quotation_format="HBS Quotation", commit_to_settings
     return full_pi_number
 
 
-def render_contract_quotation_html(unique_id, contract_id, quotation_format="HBS Quotation", pi_number=None):
+def render_contract_quotation_html(
+    unique_id,
+    contract_id,
+    quotation_format="HBS Quotation",
+    pi_number=None,
+    item_name=None,
+    item_description=None,
+    qty=None,
+    rate=None,
+    amount=None,
+    include_all_serials=1
+):
     ledger = frappe.get_doc("support_ticket_ledger", unique_id)
     contract = None
     for c in ledger.contracts:
@@ -468,21 +476,35 @@ def render_contract_quotation_html(unique_id, contract_id, quotation_format="HBS
         frappe.throw(_("No contract details found for this customer."))
 
     category = (contract.category or "").strip().upper()
-    if "AMC" in category:
-        item_name = "Annual Maintenance Contract"
-    elif "CLOUD" in category:
-        item_name = "Cloud Hosting Charges"
-    else:
-        item_name = contract.product or "Annual Maintenance Contract"
+    default_item_name = "Annual Maintenance Contract" if "AMC" in category else ("Cloud Hosting Charges" if "CLOUD" in category else (contract.product or "Annual Maintenance Contract"))
+    item_name = (item_name or "").strip() or default_item_name
 
-    qty = float(contract.qty or 1)
-    rate = float(contract.rate or contract.amount or 0)
-    amount = float(contract.amount or (qty * rate))
+    default_qty = float(contract.qty or 1)
+    try:
+        qty = float(qty) if qty is not None and str(qty).strip() != "" else default_qty
+    except Exception:
+        qty = default_qty
+
+    default_rate = float(contract.rate or contract.amount or 0)
+    try:
+        rate = float(rate) if rate is not None and str(rate).strip() != "" else default_rate
+    except Exception:
+        rate = default_rate
+
+    default_amount = float(contract.amount or (qty * rate))
+    try:
+        amount = float(amount) if amount is not None and str(amount).strip() != "" else default_amount
+    except Exception:
+        amount = default_amount
 
     serial_str = ledger.serial_no or "-"
-    serials = frappe.get_all("support_ticket_ledger_serials", filters={"parent": unique_id}, pluck="serial_no")
-    if serials:
-        serial_str = ", ".join(serials)
+    if frappe.utils.cint(include_all_serials) == 1:
+        serials = frappe.get_all("support_ticket_ledger_serials", filters={"parent": unique_id}, pluck="serial_no")
+        if serials:
+            serial_str = ", ".join(serials)
+
+    default_item_desc = f"{item_name} for {contract.product or 'Tally Software'} (Serial: {serial_str}). Renewal Period: {contract.period or '1 Year'}."
+    item_description = (item_description or "").strip() or default_item_desc
 
     if not pi_number:
         pi_number = generate_next_pi_number(quotation_format, commit_to_settings=False)
@@ -541,6 +563,12 @@ def render_contract_quotation_html(unique_id, contract_id, quotation_format="HBS
         def get(self, k, d=None):
             return self.__dict__.get(k, d)
 
+    subtotal = round(float(amount or (qty * rate)), 2)
+    tax_percent = 18.0
+    tax_amount = round((subtotal * tax_percent) / 100.0, 2)
+    grand_total = round(subtotal + tax_amount, 2)
+    final_rounded = round(grand_total)
+
     doc_obj = DocObj(
         company_name=ledger.party_name or "CLIENT",
         address=ledger.address or "",
@@ -555,13 +583,21 @@ def render_contract_quotation_html(unique_id, contract_id, quotation_format="HBS
         validity=None,
         payment_terms=None,
         taxes=None,
+        additional_discount=0,
+        total_before_tax=subtotal,
+        total_tax=tax_amount,
+        total_after_tax=grand_total,
+        final_total=final_rounded,
+        grand_total=final_rounded,
         items=[ItemObj(
             item_name=item_name,
             hsn="998313",
-            description=f"{item_name} for {contract.product or 'Tally Software'} (Serial: {serial_str}). Renewal Period: {contract.period or '1 Year'}.",
+            description=item_description,
             qty=qty,
             rate=rate,
-            amount=amount,
+            amount=subtotal,
+            tax=tax_percent,
+            tax_amount=tax_amount,
             discount_amount=0
         )]
     )
@@ -616,8 +652,29 @@ def get_contract_followup_history(unique_id, contract_id=None):
 
 
 @frappe.whitelist()
-def preview_contract_quotation(unique_id, contract_id, quotation_format="HBS Quotation"):
-    html, pi_number = render_contract_quotation_html(unique_id, contract_id, quotation_format, pi_number=None)
+def preview_contract_quotation(
+    unique_id,
+    contract_id,
+    quotation_format="HBS Quotation",
+    item_name=None,
+    item_description=None,
+    qty=None,
+    rate=None,
+    amount=None,
+    include_all_serials=1
+):
+    html, pi_number = render_contract_quotation_html(
+        unique_id,
+        contract_id,
+        quotation_format,
+        pi_number=None,
+        item_name=item_name,
+        item_description=item_description,
+        qty=qty,
+        rate=rate,
+        amount=amount,
+        include_all_serials=include_all_serials
+    )
     return {
         "html": html,
         "pi_number": pi_number
@@ -798,7 +855,27 @@ HBS Solutions Pvt Ltd
 
 
 @frappe.whitelist()
-def save_contract_followup(unique_id, contract_id=None, remarks="", next_followup_date=None, send_email=0, recipient_email=None, quotation_format="HBS Quotation", email_subject=None, email_body=None, activity_type=None, sender_name=None, from_email=None, cc_email=None):
+def save_contract_followup(
+    unique_id,
+    contract_id=None,
+    remarks="",
+    next_followup_date=None,
+    send_email=0,
+    recipient_email=None,
+    quotation_format="HBS Quotation",
+    email_subject=None,
+    email_body=None,
+    activity_type=None,
+    sender_name=None,
+    from_email=None,
+    cc_email=None,
+    item_name=None,
+    item_description=None,
+    qty=None,
+    rate=None,
+    amount=None,
+    include_all_serials=1
+):
     if not unique_id or not frappe.db.exists("support_ticket_ledger", unique_id):
         frappe.throw(_("Customer record not found."))
 
@@ -811,7 +888,18 @@ def save_contract_followup(unique_id, contract_id=None, remarks="", next_followu
             frappe.throw(_("Recipient email is required to send quotation."))
 
         pi_number = generate_next_pi_number(quotation_format, commit_to_settings=True)
-        html, quote_pi = render_contract_quotation_html(unique_id, contract_id, quotation_format, pi_number=pi_number)
+        html, quote_pi = render_contract_quotation_html(
+            unique_id,
+            contract_id,
+            quotation_format,
+            pi_number=pi_number,
+            item_name=item_name,
+            item_description=item_description,
+            qty=qty,
+            rate=rate,
+            amount=amount,
+            include_all_serials=include_all_serials
+        )
         pdf_bytes = frappe.utils.pdf.get_pdf(html)
 
         subject = (email_subject or "").strip() or f"AMC Renewal Quotation - {pi_number}"

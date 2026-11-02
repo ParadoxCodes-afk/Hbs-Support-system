@@ -379,6 +379,15 @@ function show_contract_more_info_dialog(data) {
 
     const esc = (v) => frappe.utils.escape_html(String(v || "-"));
     const fmt_curr = (v) => (v !== undefined && v !== null && v !== "") ? format_currency(v) : "-";
+    const fmt_date = (v) => {
+        if (!v) return "-";
+        let str = String(v).split(" ")[0];
+        let parts = str.split("-");
+        if (parts.length === 3 && parts[0].length === 4) {
+            return `${parts[2]}-${parts[1]}-${parts[0]}`;
+        }
+        return str;
+    };
 
     let healthBadge = "";
     if (data.is_expired) {
@@ -404,7 +413,6 @@ function show_contract_more_info_dialog(data) {
                                 <div style="font-size: 15px; font-weight: 700; color: #0f172a; margin-bottom: 2px;">${esc(data.party_name)}</div>
                                 <div style="font-size: 12px; color: #64748b;">
                                     <b>Customer ID:</b> <a href="/app/support_ticket_ledger/${encodeURIComponent(data.unique_id)}" target="_blank" style="color: #2563eb; font-weight: 600;">${esc(data.unique_id)}</a>
-                                    &nbsp;•&nbsp; <b>Our Company:</b> <span style="font-weight: 600; color: #0f172a;">${esc(data.company_name || data.our_company_name || 'HBS Solutions Pvt Ltd')}</span>
                                     &nbsp;•&nbsp; <b>Primary Serial:</b> <span style="font-family: monospace; font-weight: 600;">${esc(data.serial_no)}</span>
                                 </div>
                             </div>
@@ -426,8 +434,8 @@ function show_contract_more_info_dialog(data) {
                                     <span style="color: #64748b;">Category:</span> <span style="font-weight: 600;">${esc(data.category)}</span>
                                     <span style="color: #64748b;">Product:</span> <span style="font-weight: 600;">${esc(data.product)}</span>
                                     <span style="color: #64748b;">Billing Cycle:</span> <span>${esc(data.period)}</span>
-                                    <span style="color: #64748b;">Start Date:</span> <span>${esc(data.start_date)}</span>
-                                    <span style="color: #64748b;">Expiry Date:</span> <span style="font-weight: 600; color: ${data.is_expired ? '#dc2626' : '#0f172a'};">${esc(data.expiry_date)}</span>
+                                    <span style="color: #64748b;">Start Date:</span> <span>${fmt_date(data.start_date)}</span>
+                                    <span style="color: #64748b;">Expiry Date:</span> <span style="font-weight: 600; color: ${data.is_expired ? '#dc2626' : '#0f172a'};">${fmt_date(data.expiry_date)}</span>
                                 </div>
                             </div>
 
@@ -486,6 +494,16 @@ function show_contract_followup_dialog(data, report) {
     if (!data) return;
 
     const esc = (v) => frappe.utils.escape_html(String(v || "-"));
+    const fmt_date = (v) => {
+        if (!v) return "-";
+        let str = String(v).split(" ")[0];
+        let parts = str.split("-");
+        if (parts.length === 3 && parts[0].length === 4) {
+            return `${parts[2]}-${parts[1]}-${parts[0]}`;
+        }
+        return str;
+    };
+
     const compName = String(data.company_name || data.our_company_name || "").toUpperCase();
     let defaultFormat = "HBS Quotation";
     if (compName.includes("SERVICES")) {
@@ -493,6 +511,21 @@ function show_contract_followup_dialog(data, report) {
     } else if (compName.includes("NEWAGE")) {
         defaultFormat = "New Age Quotation";
     }
+
+    const catUpper = String(data.category || "").toUpperCase();
+    let defaultItemName = "Annual Maintenance Contract";
+    if (catUpper.includes("CLOUD")) {
+        defaultItemName = "Cloud Hosting Charges";
+    } else if (!catUpper.includes("AMC") && data.product) {
+        defaultItemName = data.product;
+    }
+
+    const defaultQty = flt(data.qty) || 1;
+    const defaultAmount = flt(data.amount) || (defaultQty * (flt(data.rate) || 0));
+    const defaultRate = flt(data.rate) || (defaultQty > 0 ? flt(defaultAmount / defaultQty, 2) : defaultAmount);
+    const allSerialsStr = data.serial_no || "-";
+    const primarySerialStr = data.primary_serial || (data.serial_no ? data.serial_no.split(",")[0].trim() : "-");
+    const defaultItemDesc = `${defaultItemName} for ${data.product || 'Tally Software'} (Serial: ${allSerialsStr}). Renewal Period: ${data.period || '1 Year'}.`;
 
     let d = new frappe.ui.Dialog({
         title: __("📞 Follow-Up & Quotation — {0}", [data.party_name || data.unique_id]),
@@ -512,7 +545,7 @@ function show_contract_followup_dialog(data, report) {
                             <div><b>Company:</b> <span style="font-weight: 600; color: #0284c7;">${esc(data.company_name || data.our_company_name || 'HBS Solutions Pvt Ltd')}</span></div>
                             <div><b>Product:</b> <span style="font-weight: 600;">${esc(data.product)}</span></div>
                             <div><b>Serial:</b> <span style="font-family: monospace;">${esc(data.serial_no)}</span></div>
-                            <div><b>Expiry:</b> <span style="font-weight: 600; color: ${data.is_expired ? '#dc2626' : '#0f172a'};">${esc(data.expiry_date)}</span></div>
+                            <div><b>Expiry:</b> <span style="font-weight: 600; color: ${data.is_expired ? '#dc2626' : '#0f172a'};">${fmt_date(data.expiry_date)}</span></div>
                             <div><b>Contact:</b> <span>${esc(data.contact)}</span></div>
                         </div>
                     </div>
@@ -596,6 +629,64 @@ function show_contract_followup_dialog(data, report) {
             {
                 fieldname: "sec_quote_details",
                 fieldtype: "Section Break",
+                label: __("Item & Quotation Details"),
+                depends_on: "eval:doc.send_email == 1"
+            },
+            {
+                fieldname: "item_name",
+                label: __("Item Name *"),
+                fieldtype: "Data",
+                default: defaultItemName,
+                depends_on: "eval:doc.send_email == 1"
+            },
+            {
+                fieldname: "include_all_serials",
+                label: __("Include all serial numbers (unchecked = primary only)"),
+                fieldtype: "Check",
+                default: 1,
+                depends_on: "eval:doc.send_email == 1"
+            },
+            {
+                fieldname: "item_description",
+                label: __("Item Description"),
+                fieldtype: "Small Text",
+                default: defaultItemDesc,
+                depends_on: "eval:doc.send_email == 1"
+            },
+            {
+                fieldname: "col_quote_calc_1",
+                fieldtype: "Column Break",
+                depends_on: "eval:doc.send_email == 1"
+            },
+            {
+                fieldname: "item_qty",
+                label: __("Qty"),
+                fieldtype: "Float",
+                default: defaultQty,
+                depends_on: "eval:doc.send_email == 1"
+            },
+            {
+                fieldname: "item_rate",
+                label: __("Rate (₹)"),
+                fieldtype: "Currency",
+                default: defaultRate,
+                depends_on: "eval:doc.send_email == 1"
+            },
+            {
+                fieldname: "col_quote_calc_2",
+                fieldtype: "Column Break",
+                depends_on: "eval:doc.send_email == 1"
+            },
+            {
+                fieldname: "item_amount",
+                label: __("Amount (₹)"),
+                fieldtype: "Currency",
+                default: defaultAmount,
+                depends_on: "eval:doc.send_email == 1"
+            },
+            {
+                fieldname: "sec_quote_format_break",
+                fieldtype: "Section Break",
                 depends_on: "eval:doc.send_email == 1"
             },
             {
@@ -655,7 +746,13 @@ function show_contract_followup_dialog(data, report) {
                     email_body: values.email_body || "",
                     sender_name: values.sender_name || "",
                     from_email: values.from_email || "",
-                    cc_email: values.cc_email || ""
+                    cc_email: values.cc_email || "",
+                    item_name: values.item_name || defaultItemName,
+                    item_description: values.item_description || defaultItemDesc,
+                    qty: flt(values.item_qty) || defaultQty,
+                    rate: flt(values.item_rate) || defaultRate,
+                    amount: flt(values.item_amount) || defaultAmount,
+                    include_all_serials: values.include_all_serials ? 1 : 0
                 },
                 callback: function(r) {
                     d.get_primary_btn().prop("disabled", false).text(__("Save Follow-up"));
@@ -685,7 +782,13 @@ function show_contract_followup_dialog(data, report) {
             args: {
                 unique_id: data.unique_id,
                 contract_id: data.contract_id,
-                quotation_format: qFormat
+                quotation_format: qFormat,
+                item_name: d.get_value("item_name") || defaultItemName,
+                item_description: d.get_value("item_description") || defaultItemDesc,
+                qty: flt(d.get_value("item_qty")) || defaultQty,
+                rate: flt(d.get_value("item_rate")) || defaultRate,
+                amount: flt(d.get_value("item_amount")) || defaultAmount,
+                include_all_serials: d.get_value("include_all_serials") ? 1 : 0
             },
             callback: function(r) {
                 if (r.message && r.message.html) {
@@ -705,6 +808,56 @@ function show_contract_followup_dialog(data, report) {
             }
         });
     });
+
+    // Two-way calculation between Qty, Rate, and Amount
+    let isCalculating = false;
+
+    function calc_from_qty_rate() {
+        if (isCalculating) return;
+        isCalculating = true;
+        let q = flt(d.get_value("item_qty"));
+        if (q <= 0) q = 1;
+        let r = flt(d.get_value("item_rate")) || 0;
+        let amt = flt(q * r, 2);
+        d.set_value("item_amount", amt);
+        isCalculating = false;
+    }
+
+    function calc_from_amount() {
+        if (isCalculating) return;
+        isCalculating = true;
+        let amt = flt(d.get_value("item_amount")) || 0;
+        let q = flt(d.get_value("item_qty"));
+        if (q <= 0) q = 1;
+        let r = flt(amt / q, 2);
+        d.set_value("item_rate", r);
+        isCalculating = false;
+    }
+
+    if (d.fields_dict.item_qty && d.fields_dict.item_qty.$input) {
+        d.fields_dict.item_qty.$input.on("input change", calc_from_qty_rate);
+    }
+    if (d.fields_dict.item_rate && d.fields_dict.item_rate.$input) {
+        d.fields_dict.item_rate.$input.on("input change", calc_from_qty_rate);
+    }
+    if (d.fields_dict.item_amount && d.fields_dict.item_amount.$input) {
+        d.fields_dict.item_amount.$input.on("input change", calc_from_amount);
+    }
+
+    // Toggle all serials vs primary serial in item_description
+    if (d.fields_dict.include_all_serials) {
+        d.fields_dict.include_all_serials.df.onchange = function() {
+            const incAll = d.get_value("include_all_serials");
+            const activeSerial = incAll ? allSerialsStr : primarySerialStr;
+            let curDesc = d.get_value("item_description") || "";
+            if (curDesc.includes("(Serial:")) {
+                curDesc = curDesc.replace(/\(Serial:[^)]*\)/, `(Serial: ${activeSerial})`);
+            } else {
+                curDesc = `${curDesc} (Serial: ${activeSerial})`;
+            }
+            d.set_value("item_description", curDesc);
+        };
+    }
 
     // Toggle button label and remarks requirement based on send_email checkbox
     d.fields_dict.send_email.df.onchange = function() {
