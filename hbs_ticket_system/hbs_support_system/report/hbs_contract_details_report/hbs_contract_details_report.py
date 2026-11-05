@@ -49,13 +49,6 @@ def execute(filters=None):
 def get_columns():
     return [
         {
-            "label": _("Customer ID"),
-            "fieldname": "unique_id",
-            "fieldtype": "Link",
-            "options": "support_ticket_ledger",
-            "width": 110,
-        },
-        {
             "label": _("Serial No(s)"),
             "fieldname": "serial_no",
             "fieldtype": "Data",
@@ -74,11 +67,18 @@ def get_columns():
             "width": 105,
         },
         {
-            "label": _("Product"),
-            "fieldname": "product",
+            "label": _("Executive 1"),
+            "fieldname": "executive1",
             "fieldtype": "Link",
-            "options": "support_contract_product",
-            "width": 170,
+            "options": "User",
+            "width": 130,
+        },
+        {
+            "label": _("Executive 2"),
+            "fieldname": "executive2",
+            "fieldtype": "Link",
+            "options": "User",
+            "width": 130,
         },
         {
             "label": _("Status / Health"),

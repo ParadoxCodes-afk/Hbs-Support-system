@@ -204,6 +204,10 @@ frappe.query_reports["HBS Contract Details Report"] = {
                 color: #047857 !important;
                 border-color: #6ee7b7 !important;
             }
+            .report-wrapper .dt-scrollable,
+            .datatable .dt-scrollable {
+                min-height: 140px !important;
+            }
         `);
 
         // Global handler for More Info button click
