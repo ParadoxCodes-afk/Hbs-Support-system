@@ -781,18 +781,25 @@ function show_contract_followup_dialog(data, report) {
     // Preview Quotation Button Click
     d.fields_dict.preview_btn.$input.on("click", function() {
         const qFormat = d.get_value("quotation_format") || defaultFormat;
+        const itemName = d.get_value("item_name") || defaultItemName;
+        const itemDesc = d.get_value("item_description") || defaultItemDesc;
+        const itemQty = flt(d.get_value("item_qty")) || defaultQty;
+        const itemRate = flt(d.get_value("item_rate")) || defaultRate;
+        const itemAmt = flt(d.get_value("item_amount")) || defaultAmount;
+        const incAll = d.get_value("include_all_serials") ? 1 : 0;
+
         frappe.call({
             method: "hbs_ticket_system.hbs_support_system.report.hbs_contract_details_report.hbs_contract_details_report.preview_contract_quotation",
             args: {
                 unique_id: data.unique_id,
                 contract_id: data.contract_id,
                 quotation_format: qFormat,
-                item_name: d.get_value("item_name") || defaultItemName,
-                item_description: d.get_value("item_description") || defaultItemDesc,
-                qty: flt(d.get_value("item_qty")) || defaultQty,
-                rate: flt(d.get_value("item_rate")) || defaultRate,
-                amount: flt(d.get_value("item_amount")) || defaultAmount,
-                include_all_serials: d.get_value("include_all_serials") ? 1 : 0
+                item_name: itemName,
+                item_description: itemDesc,
+                qty: itemQty,
+                rate: itemRate,
+                amount: itemAmt,
+                include_all_serials: incAll
             },
             callback: function(r) {
                 if (r.message && r.message.html) {
@@ -805,9 +812,39 @@ function show_contract_followup_dialog(data, report) {
                                 fieldname: "preview_html",
                                 options: `<iframe srcdoc="${frappe.utils.escape_html(r.message.html)}" style="width: 100%; height: 600px; border: 1px solid #cbd5e1; border-radius: 4px;"></iframe>`
                             }
-                        ]
+                        ],
+                        primary_action_label: __("Close"),
+                        primary_action: function() {
+                            prev_d.hide();
+                        },
+                        secondary_action_label: __("⬇️ Download PDF"),
+                        secondary_action: function() {
+                            let query_params = $.param({
+                                unique_id: data.unique_id,
+                                contract_id: data.contract_id,
+                                quotation_format: qFormat,
+                                item_name: itemName,
+                                item_description: itemDesc,
+                                qty: itemQty,
+                                rate: itemRate,
+                                amount: itemAmt,
+                                include_all_serials: incAll
+                            });
+                            let download_url = frappe.urllib.get_full_url(
+                                `/api/method/hbs_ticket_system.hbs_support_system.report.hbs_contract_details_report.hbs_contract_details_report.download_contract_quotation_pdf?${query_params}`
+                            );
+                            let a = document.createElement("a");
+                            a.href = download_url;
+                            a.download = "";
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                        }
                     });
                     prev_d.show();
+                    if (prev_d.get_secondary_btn) {
+                        prev_d.get_secondary_btn().removeClass('btn-default').addClass('btn-primary').css({ "margin-right": "auto" });
+                    }
                 }
             }
         });

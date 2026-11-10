@@ -682,6 +682,51 @@ def preview_contract_quotation(
 
 
 @frappe.whitelist()
+def download_contract_quotation_pdf(
+    unique_id,
+    contract_id,
+    quotation_format="HBS Quotation",
+    item_name=None,
+    item_description=None,
+    qty=None,
+    rate=None,
+    amount=None,
+    include_all_serials=1
+):
+    """Download AMC Contract Quotation as PDF."""
+    html, pi_number = render_contract_quotation_html(
+        unique_id,
+        contract_id,
+        quotation_format,
+        pi_number=None,
+        item_name=item_name,
+        item_description=item_description,
+        qty=qty,
+        rate=rate,
+        amount=amount,
+        include_all_serials=include_all_serials
+    )
+
+    pdf_bytes = frappe.utils.pdf.get_pdf(html)
+
+    ledger_party = frappe.db.get_value("support_ticket_ledger", unique_id, "party_name") or unique_id or "Customer"
+    import re
+    safe_party = re.sub(r'[\/*?:"<>|]', '_', ledger_party).strip()
+    safe_pi = re.sub(r'[\/*?:"<>|]', '_', str(pi_number or "")).strip()
+
+    if safe_party and safe_pi:
+        filename = f"{safe_party}_{safe_pi}_Quotation.pdf"
+    elif safe_party:
+        filename = f"{safe_party}_AMC_Quotation.pdf"
+    else:
+        filename = f"Contract_Quotation_{unique_id}.pdf"
+
+    frappe.local.response.filename = filename
+    frappe.local.response.filecontent = pdf_bytes
+    frappe.local.response.type = "download"
+
+
+@frappe.whitelist()
 def get_contract_email_defaults(unique_id, contract_id=None):
     if not unique_id or not frappe.db.exists("support_ticket_ledger", unique_id):
         frappe.throw(_("Customer record not found."))
