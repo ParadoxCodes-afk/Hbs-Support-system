@@ -529,7 +529,13 @@ function show_contract_followup_dialog(data, report) {
     const defaultRate = flt(data.rate) || (defaultQty > 0 ? flt(defaultAmount / defaultQty, 2) : defaultAmount);
     const allSerialsStr = data.serial_no || "-";
     const primarySerialStr = data.primary_serial || (data.serial_no ? data.serial_no.split(",")[0].trim() : "-");
-    const defaultItemDesc = `${defaultItemName} for ${data.product || 'Tally Software'} (Serial: ${allSerialsStr}). Renewal Period: ${data.period || '1 Year'}.`;
+    let defaultItemDesc;
+    if (catUpper.includes("AMC") || defaultItemName === "Annual Maintenance Contract") {
+        defaultItemDesc = `Annual Maintenance Contract for (Serial: ${allSerialsStr}). Renewal Period: ${data.period || '1 Year'}.`;
+    } else {
+        const prodSuffix = data.product && data.product !== defaultItemName ? ` for ${data.product}` : '';
+        defaultItemDesc = `${defaultItemName}${prodSuffix} (Serial: ${allSerialsStr}). Renewal Period: ${data.period || '1 Year'}.`;
+    }
 
     let d = new frappe.ui.Dialog({
         title: __("📞 Follow-Up & Quotation — {0}", [data.party_name || data.unique_id]),

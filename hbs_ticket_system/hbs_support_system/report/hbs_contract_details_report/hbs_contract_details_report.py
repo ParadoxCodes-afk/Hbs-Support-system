@@ -503,7 +503,11 @@ def render_contract_quotation_html(
         if serials:
             serial_str = ", ".join(serials)
 
-    default_item_desc = f"{item_name} for {contract.product or 'Tally Software'} (Serial: {serial_str}). Renewal Period: {contract.period or '1 Year'}."
+    if "AMC" in category or default_item_name == "Annual Maintenance Contract":
+        default_item_desc = f"Annual Maintenance Contract for (Serial: {serial_str}). Renewal Period: {contract.period or '1 Year'}."
+    else:
+        prod_suffix = f" for {contract.product}" if (contract.product and contract.product != default_item_name) else ""
+        default_item_desc = f"{item_name}{prod_suffix} (Serial: {serial_str}). Renewal Period: {contract.period or '1 Year'}."
     item_description = (item_description or "").strip() or default_item_desc
 
     if not pi_number:
