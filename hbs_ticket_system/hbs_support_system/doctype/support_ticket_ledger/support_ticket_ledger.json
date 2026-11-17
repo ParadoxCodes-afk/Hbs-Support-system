@@ -23,6 +23,9 @@
   "followups_tab",
   "followups_section",
   "contract_followups",
+  "call_history_tab",
+  "call_history_section",
+  "call_history_html",
   "address_tab",
   "address_section",
   "address",
@@ -136,6 +139,21 @@
    "fieldtype": "Table",
    "label": "Contract Follow-ups",
    "options": "support_contract_followup"
+  },
+  {
+   "fieldname": "call_history_tab",
+   "fieldtype": "Tab Break",
+   "label": "Call History"
+  },
+  {
+   "fieldname": "call_history_section",
+   "fieldtype": "Section Break",
+   "label": "Customer Call History"
+  },
+  {
+   "fieldname": "call_history_html",
+   "fieldtype": "HTML",
+   "label": "Call History"
   },
   {
    "fieldname": "address_tab",

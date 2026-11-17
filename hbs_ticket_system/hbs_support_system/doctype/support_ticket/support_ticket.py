@@ -101,6 +101,8 @@ def get_ledger_for_serial(serial_no):
     latest_mod_exp = None
     c_exec1 = None
     c_exec2 = None
+    expired_exec1 = None
+    expired_exec2 = None
 
     for c in contracts:
         cat = (c.category or "").strip().upper()
@@ -115,6 +117,8 @@ def get_ledger_for_serial(serial_no):
         elif "AMC" in cat:
             if c.expiry_date and (not latest_expired_amc_exp or str(c.expiry_date) > str(latest_expired_amc_exp)):
                 latest_expired_amc_exp = c.expiry_date
+                expired_exec1 = c.executive1 or expired_exec1
+                expired_exec2 = c.executive2 or expired_exec2
         elif "CLOUD" in cat and is_active:
             cloud_active = True
             if not latest_cloud_exp or c.expiry_date > latest_cloud_exp:
@@ -127,8 +131,12 @@ def get_ledger_for_serial(serial_no):
     if contracts:
         ledger["amc_status"] = "YES" if amc_active else "NO"
         ledger["amc_expiry_date"] = latest_amc_exp if amc_active else latest_expired_amc_exp
-        if c_exec1: ledger["amc_executive"] = c_exec1
-        if c_exec2: ledger["amc_executive2"] = c_exec2
+        assigned_e1 = c_exec1 or expired_exec1 or ledger.get("amc_executive")
+        assigned_e2 = c_exec2 or expired_exec2 or ledger.get("amc_executive2")
+        if assigned_e1:
+            ledger["amc_executive"] = assigned_e1
+        if assigned_e2:
+            ledger["amc_executive2"] = assigned_e2
 
     ledger["cloud_status"] = "YES" if cloud_active else "NO"
     ledger["cloud_expiry_date"] = latest_cloud_exp
@@ -816,11 +824,11 @@ def get_call_history(serial_no=None, current_ticket=None, unique_id=None):
     vals = {}
 
     if unique_id and serial_no:
-        conds.append("(unique_id = %(unique_id)s OR serial_no = %(serial_no)s)")
+        conds.append("(unique_id = %(unique_id)s OR serial_no = %(serial_no)s OR serial_no IN (SELECT serial_no FROM `tabsupport_ticket_ledger_serials` WHERE parent = %(unique_id)s AND IFNULL(serial_no, '') != ''))")
         vals["unique_id"] = unique_id
         vals["serial_no"] = serial_no
     elif unique_id:
-        conds.append("unique_id = %(unique_id)s")
+        conds.append("(unique_id = %(unique_id)s OR serial_no = %(unique_id)s OR serial_no IN (SELECT serial_no FROM `tabsupport_ticket_ledger_serials` WHERE parent = %(unique_id)s AND IFNULL(serial_no, '') != ''))")
         vals["unique_id"] = unique_id
     else:
         conds.append("serial_no = %(serial_no)s")
@@ -832,23 +840,59 @@ def get_call_history(serial_no=None, current_ticket=None, unique_id=None):
 
     where_clause = " AND ".join(conds)
 
-    return frappe.db.sql(f"""
+    tickets = frappe.db.sql(f"""
         SELECT
             name,
             serial_no,
             party_name,
+            contact_name,
+            contact_phone,
             call_source,
             call_type,
             executive,
             executive2,
             status,
             remarks,
+            total_time_taken,
             creation
         FROM `tabsupport_ticket`
         WHERE {where_clause}
         ORDER BY creation DESC
         LIMIT 100
     """, vals, as_dict=True)
+
+    if tickets:
+        ticket_names = [t["name"] for t in tickets]
+        followups = frappe.db.sql("""
+            SELECT parent, remarks, status, updated_by, updated_on, idx
+            FROM `tabsupport_ticket_followup`
+            WHERE parent IN %(parents)s AND IFNULL(TRIM(remarks), '') != ''
+            ORDER BY parent, idx ASC
+        """, {"parents": ticket_names}, as_dict=True)
+
+        followup_map = {}
+        for f in followups:
+            rem = (f.get("remarks") or "").strip()
+            if rem:
+                followup_map.setdefault(f["parent"], []).append({
+                    "status": f.get("status") or "",
+                    "remarks": rem,
+                    "updated_by": f.get("updated_by") or "",
+                    "updated_on": str(f.get("updated_on") or "")
+                })
+
+        for t in tickets:
+            t_followups = followup_map.get(t["name"], [])
+            if not t_followups and (t.get("remarks") or "").strip():
+                t_followups = [{"status": t.get("status") or "", "remarks": t["remarks"].strip()}]
+            t["all_remarks"] = t_followups
+            if t_followups:
+                t["remarks"] = "\n".join(
+                    f"[{f['status']}] {f['remarks']}" if f.get("status") else f["remarks"]
+                    for f in t_followups
+                )
+
+    return tickets
     
 
 def is_owner_or_admin(user=None):

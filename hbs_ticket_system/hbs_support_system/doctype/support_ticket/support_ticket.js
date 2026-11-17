@@ -663,13 +663,8 @@ frappe.ui.form.on('support_ticket', {
                             frm.set_value('modules_status', res.modules_status || 'NO');
                             frm.set_value('modules_expiry_date', res.modules_expiry_date || '');
                             frm.set_value('priority', res.amc_status === 'YES' ? 'P1' : 'P2');
-                            if (res.amc_status === 'YES') {
-                                frm.set_value('amc_executive', res.amc_executive || '');
-                                frm.set_value('amc_executive2', res.amc_executive2 || '');
-                            } else {
-                                frm.set_value('amc_executive', '');
-                                frm.set_value('amc_executive2', '');
-                            }
+                            frm.set_value('amc_executive', res.amc_executive || '');
+                            frm.set_value('amc_executive2', res.amc_executive2 || '');
                             highlight_amc_fields(frm);
                             load_call_history(frm);
                         }
@@ -971,8 +966,8 @@ function highlight_amc_fields(frm) {
     }
 
     frm.toggle_display('amc_expiry_date', Boolean(is_amc || is_expired || (frm.doc && frm.doc.amc_status && frm.doc.amc_status !== 'NO')));
-    frm.toggle_display('amc_executive', Boolean(is_amc));
-    frm.toggle_display('amc_executive2', Boolean(is_amc));
+    frm.toggle_display('amc_executive', true);
+    frm.toggle_display('amc_executive2', true);
 }
 
 
@@ -1190,13 +1185,8 @@ function open_autofill_dialog(frm) {
                 await frm.set_value('contact_name', row.contact_name || '');
                 await frm.set_value('contact_phone', row.contact_phone || row.phone_number || '');
 
-                if (row.amc_status === 'YES') {
-                    await frm.set_value('amc_executive', row.amc_executive || '');
-                    await frm.set_value('amc_executive2', row.amc_executive2 || '');
-                } else {
-                    await frm.set_value('amc_executive', '');
-                    await frm.set_value('amc_executive2', '');
-                }
+                await frm.set_value('amc_executive', row.amc_executive || '');
+                await frm.set_value('amc_executive2', row.amc_executive2 || '');
             } finally {
                 frm._is_autofilling = false;
             }
@@ -1220,13 +1210,8 @@ function open_autofill_dialog(frm) {
                         await frm.set_value('modules_status', res.modules_status || 'NO');
                         await frm.set_value('modules_expiry_date', res.modules_expiry_date || '');
                         await frm.set_value('priority', res.amc_status === 'YES' ? 'P1' : 'P2');
-                        if (res.amc_status === 'YES') {
-                            await frm.set_value('amc_executive', res.amc_executive || '');
-                            await frm.set_value('amc_executive2', res.amc_executive2 || '');
-                        } else {
-                            await frm.set_value('amc_executive', '');
-                            await frm.set_value('amc_executive2', '');
-                        }
+                        await frm.set_value('amc_executive', res.amc_executive || '');
+                        await frm.set_value('amc_executive2', res.amc_executive2 || '');
                         highlight_amc_fields(frm);
                     }
                 }
