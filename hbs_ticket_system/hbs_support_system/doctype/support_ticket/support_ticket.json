@@ -41,6 +41,8 @@
   "followup_history",
   "followup_history_html",
   "remarks",
+  "activity_section",
+  "activity",
   "call_history_tab",
   "call_history",
   "timing_metrics_section",
@@ -416,12 +418,22 @@
    "fieldtype": "Float",
    "label": "Followup to Completed (Mins)",
    "read_only": 1
+  },
+  {
+   "fieldname": "activity_section",
+   "fieldtype": "Section Break",
+   "label": "Activity"
+  },
+  {
+   "fieldname": "activity",
+   "fieldtype": "HTML",
+   "label": "Activity"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-10-29 11:41:24.106408",
+ "modified": "2026-11-25 17:54:23.356820",
  "modified_by": "Administrator",
  "module": "HBS Support System",
  "name": "support_ticket",

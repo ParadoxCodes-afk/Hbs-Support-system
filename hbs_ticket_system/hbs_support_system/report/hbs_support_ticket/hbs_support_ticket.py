@@ -135,6 +135,48 @@ def build_conditions(filters):
         conditions.append("st.amc_status = %(amc_status)s")
         params["amc_status"] = amc_status
 
+    dynamic_filters = filters.get("dynamic_filters")
+    if dynamic_filters:
+        import json
+        if isinstance(dynamic_filters, str):
+            try:
+                dynamic_filters = json.loads(dynamic_filters)
+            except Exception:
+                dynamic_filters = []
+        if isinstance(dynamic_filters, list):
+            valid_operators = {
+                "=": "=", "!=": "!=", "<": "<", ">": ">", "<=": "<=", ">=": ">=",
+                "like": "LIKE", "not like": "NOT LIKE", "in": "IN", "not in": "NOT IN",
+                "is": "IS", "between": "BETWEEN"
+            }
+            ticket_cols = set(frappe.db.get_table_columns("support_ticket"))
+            for idx, df in enumerate(dynamic_filters):
+                if isinstance(df, (list, tuple)) and len(df) >= 4:
+                    fn, op, val = df[1], df[2], df[3]
+                    op_clean = str(op or "=").strip().lower()
+                    if fn in ticket_cols and op_clean in valid_operators and val is not None and str(val).strip() != "":
+                        sql_op = valid_operators[op_clean]
+                        param_key = f"dyn_{fn}_{idx}"
+                        if sql_op == "IS":
+                            if str(val).strip().lower() == "set":
+                                conditions.append(f"(st.`{fn}` IS NOT NULL AND st.`{fn}` != '')")
+                            else:
+                                conditions.append(f"(st.`{fn}` IS NULL OR st.`{fn}` = '')")
+                        elif sql_op == "BETWEEN" and isinstance(val, (list, tuple)) and len(val) >= 2:
+                            conditions.append(f"st.`{fn}` BETWEEN %({param_key}_a)s AND %({param_key}_b)s")
+                            params[f"{param_key}_a"] = val[0]
+                            params[f"{param_key}_b"] = val[1]
+                        elif sql_op in ("LIKE", "NOT LIKE"):
+                            conditions.append(f"st.`{fn}` {sql_op} %({param_key})s")
+                            params[param_key] = f"%{val}%" if "%" not in str(val) else val
+                        elif sql_op in ("IN", "NOT IN"):
+                            val_list = [v.strip() for v in str(val).split(",") if v.strip()] if isinstance(val, str) else list(val)
+                            conditions.append(f"st.`{fn}` {sql_op} %({param_key})s")
+                            params[param_key] = tuple(val_list) if val_list else ("",)
+                        else:
+                            conditions.append(f"st.`{fn}` {sql_op} %({param_key})s")
+                            params[param_key] = val
+
     return conditions, params
 
 
@@ -259,34 +301,23 @@ def get_executive_ticket_details(
     to_date=None,
     status=None,
     amc_status=None,
+    dynamic_filters=None,
 ):
-    conditions = []
-    params = {}
+    filters = {
+        "executive": executive,
+        "from_date": from_date,
+        "to_date": to_date,
+        "status": status,
+        "amc_status": amc_status,
+        "dynamic_filters": dynamic_filters,
+    }
+    conditions, params = build_conditions(filters)
 
     if executive and executive != "All":
         if executive == "Unassigned":
+            # Override executive condition for unassigned tickets
+            conditions = [c for c in conditions if not c.startswith("st.executive2 =")]
             conditions.append("(st.executive2 IS NULL OR TRIM(st.executive2) = '' OR st.executive2 = 'Unassigned')")
-        else:
-            conditions.append("st.executive2 = %(executive)s")
-            params["executive"] = executive
-
-    if from_date:
-        conditions.append("DATE(st.creation) >= %(from_date)s")
-        params["from_date"] = from_date
-    if to_date:
-        conditions.append("DATE(st.creation) <= %(to_date)s")
-        params["to_date"] = to_date
-
-    if status and status != "All":
-        if status == "OPEN":
-            conditions.append("st.status != 'COMPLETED'")
-        else:
-            conditions.append("st.status = %(status)s")
-            params["status"] = status
-
-    if amc_status and amc_status != "All":
-        conditions.append("st.amc_status = %(amc_status)s")
-        params["amc_status"] = amc_status
 
     where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
@@ -297,6 +328,7 @@ def get_executive_ticket_details(
             COALESCE(st.party_name, '') AS party_name,
             COALESCE(st.contact_name, '') AS contact_name,
             COALESCE(st.contact_phone, '') AS contact_phone,
+            COALESCE(st.call_source, '') AS call_source,
             COALESCE(st.amc_status, 'NO') AS amc_status,
             COALESCE(st.status, 'NEW') AS status,
             COALESCE(st.call_type, '') AS call_type,

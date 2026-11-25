@@ -48,6 +48,13 @@ frappe.query_reports["hbs_support_ticket"] = {
                 "NO"
             ],
             default: "All"
+        },
+        {
+            fieldname: "dynamic_filters",
+            label: __("Dynamic Filters"),
+            fieldtype: "Data",
+            hidden: 1,
+            default: ""
         }
     ],
 
@@ -114,6 +121,42 @@ frappe.query_reports["hbs_support_ticket"] = {
                 }
             });
         }
+        // Setup Desk-style dynamic Filter button using frappe.ui.FilterGroup
+        if (report && report.page && report.page.page_form) {
+            let $form = report.page.page_form;
+            if (!$form.find(".btn-desk-filter").length) {
+                let $btn_container = $(`
+                    <div class="form-group desk-filter-btn-container" style="display: inline-flex; align-items: center; padding: 0 6px; margin-bottom: 8px;">
+                        <button class="btn btn-xs btn-default btn-desk-filter" style="height: 28px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;">
+                            <span class="filter-icon"><i class="fa fa-filter"></i></span>
+                            <span class="button-label">${__("Filter")}</span>
+                        </button>
+                        <button class="btn btn-xs btn-default filter-x-button text-muted" style="height: 28px; display: none; margin-left: 4px; padding: 2px 6px;">
+                            <i class="fa fa-times"></i>
+                        </button>
+                    </div>
+                `);
+                $form.append($btn_container);
+
+                try {
+                    let filter_group = new frappe.ui.FilterGroup({
+                        parent: $btn_container,
+                        doctype: "support_ticket",
+                        filter_button: $btn_container.find(".btn-desk-filter"),
+                        filter_x_button: $btn_container.find(".filter-x-button"),
+                        on_change: function() {
+                            let raw_filters = filter_group.get_filters();
+                            let filter_json = (raw_filters && raw_filters.length) ? JSON.stringify(raw_filters) : "";
+                            report.set_filter_value("dynamic_filters", filter_json);
+                            report.refresh();
+                        }
+                    });
+                    report.filter_group = filter_group;
+                } catch (e) {
+                    console.warn("Could not initialize frappe.ui.FilterGroup:", e);
+                }
+            }
+        }
     }
 };
 
@@ -121,12 +164,19 @@ function open_ticket_drilldown_dialog(report, exec_id) {
     let filters = report.get_values() || {};
     let label = exec_id === "Unassigned" ? __("Unassigned Tickets") : exec_id;
 
+    let dynamic_val = filters.dynamic_filters || "";
+    if (!dynamic_val && report.filter_group) {
+        let raw = report.filter_group.get_filters();
+        if (raw && raw.length) dynamic_val = JSON.stringify(raw);
+    }
+
     let args = {
         executive: exec_id,
         from_date: filters.from_date || "",
         to_date: filters.to_date || "",
         status: filters.status || "",
-        amc_status: filters.amc_status || ""
+        amc_status: filters.amc_status || "",
+        dynamic_filters: dynamic_val
     };
 
     frappe.call({
@@ -162,7 +212,7 @@ function render_ticket_drilldown_dialog(exec_id, label, tickets, filters) {
 
     let build_table_rows = function(ticket_list) {
         if (!ticket_list || ticket_list.length === 0) {
-            return `<tr><td colspan="8" class="text-center text-muted" style="padding: 24px;">${__("No tickets found for this selection.")}</td></tr>`;
+            return `<tr><td colspan="9" class="text-center text-muted" style="padding: 24px;">${__("No tickets found for this selection.")}</td></tr>`;
         }
         return ticket_list.map((t, idx) => `
             <tr>
@@ -179,6 +229,11 @@ function render_ticket_drilldown_dialog(exec_id, label, tickets, filters) {
                 <td>
                     <div>${frappe.utils.escape_html(t.contact_name || '-')}</div>
                     <div style="font-size: 11px; color: #64748b;">${frappe.utils.escape_html(t.contact_phone || '')}</div>
+                </td>
+                <td>
+                    <span class="badge badge-light" style="font-size: 11px; color: #334155; font-weight: 600; background: #f1f5f9; border: 1px solid #e2e8f0;">
+                        ${frappe.utils.escape_html(t.call_source || '-')}
+                    </span>
                 </td>
                 <td style="text-align: center;">${get_amc_badge(t.amc_status)}</td>
                 <td style="text-align: center;">${get_status_badge(t.status)}</td>
@@ -204,7 +259,7 @@ function render_ticket_drilldown_dialog(exec_id, label, tickets, filters) {
                             <span class="text-muted" style="margin-left: 12px; font-size: 13px;">Total Tickets: <b style="color: #0284c7;">${tickets.length}</b></span>
                         </div>
                         <div style="display: flex; gap: 8px; align-items: center;">
-                            <input type="text" class="form-control form-control-sm ticket-filter-input" placeholder="${__('Search party, serial, contact...')}" style="width: 250px; font-size: 12px; border-radius: 6px;">
+                            <input type="text" class="form-control form-control-sm ticket-filter-input" placeholder="${__('Search party, serial, call source, contact...')}" style="width: 260px; font-size: 12px; border-radius: 6px;">
                             <button class="btn btn-xs btn-default btn-open-ticket-list" style="font-weight: 600; border-radius: 6px; padding: 5px 12px;">
                                 <i class="fa fa-external-link"></i> ${__('Open in List View')}
                             </button>
@@ -221,13 +276,14 @@ function render_ticket_drilldown_dialog(exec_id, label, tickets, filters) {
                             <thead style="position: sticky; top: 0; background: #f1f5f9; z-index: 2;">
                                 <tr style="color: #334155; font-size: 11px; text-transform: uppercase;">
                                     <th style="width: 40px; text-align: center;">#</th>
-                                    <th style="width: 140px;">${__('Ticket ID')}</th>
-                                    <th style="width: 220px;">${__('Party & Serial')}</th>
-                                    <th style="width: 170px;">${__('Contact')}</th>
-                                    <th style="width: 90px; text-align: center;">${__('AMC')}</th>
-                                    <th style="width: 110px; text-align: center;">${__('Status')}</th>
-                                    <th style="width: 130px; text-align: center;">${__('Created')}</th>
-                                    <th style="width: 110px; text-align: center;">${__('Duration')}</th>
+                                    <th style="width: 130px;">${__('Ticket ID')}</th>
+                                    <th style="width: 200px;">${__('Party & Serial')}</th>
+                                    <th style="width: 150px;">${__('Contact')}</th>
+                                    <th style="width: 120px;">${__('Call Source')}</th>
+                                    <th style="width: 80px; text-align: center;">${__('AMC')}</th>
+                                    <th style="width: 100px; text-align: center;">${__('Status')}</th>
+                                    <th style="width: 120px; text-align: center;">${__('Created')}</th>
+                                    <th style="width: 100px; text-align: center;">${__('Duration')}</th>
                                 </tr>
                             </thead>
                             <tbody class="tickets-table-body">
@@ -260,6 +316,7 @@ function render_ticket_drilldown_dialog(exec_id, label, tickets, filters) {
             (t.name && t.name.toLowerCase().includes(q)) ||
             (t.party_name && t.party_name.toLowerCase().includes(q)) ||
             (t.serial_no && t.serial_no.toLowerCase().includes(q)) ||
+            (t.call_source && t.call_source.toLowerCase().includes(q)) ||
             (t.contact_name && t.contact_name.toLowerCase().includes(q)) ||
             (t.contact_phone && t.contact_phone.toLowerCase().includes(q)) ||
             (t.status && t.status.toLowerCase().includes(q))
@@ -280,6 +337,9 @@ function render_ticket_drilldown_dialog(exec_id, label, tickets, filters) {
         }
         if (filters.amc_status && filters.amc_status !== "All") {
             route_opts["amc_status"] = filters.amc_status;
+        }
+        if (filters.call_source && filters.call_source !== "All") {
+            route_opts["call_source"] = filters.call_source;
         }
         dialog.hide();
         frappe.set_route("List", "support_ticket", route_opts);
